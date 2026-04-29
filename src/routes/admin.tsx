@@ -262,6 +262,29 @@ function AdminPage() {
 
       <main className="mx-auto max-w-5xl space-y-8 px-6 py-8">
         <Card className="p-6">
+          <h2 className="mb-1 text-base font-medium">Global settings</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            URL where users in <span className="font-medium">Waiting</span> mode are redirected.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="default-waiting-url">Default waiting URL</Label>
+            <Input
+              id="default-waiting-url"
+              type="url"
+              placeholder="https://example.com"
+              value={defaultWaitingUrl}
+              onChange={(e) => setDefaultWaitingUrl(e.target.value)}
+              onBlur={saveSettings}
+              disabled={!settingsId || savingSettings}
+            />
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Save className="h-3 w-3" />
+              {savingSettings ? "Saving…" : "Saves automatically when you click outside the field."}
+            </p>
+          </div>
+        </Card>
+
+        <Card className="p-6">
           <h2 className="mb-4 text-base font-medium">Create new link</h2>
           <form
             onSubmit={handleCreate}
