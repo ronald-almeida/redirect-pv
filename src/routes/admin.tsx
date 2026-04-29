@@ -73,6 +73,11 @@ function AdminPage() {
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // global settings
+  const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [defaultWaitingUrl, setDefaultWaitingUrl] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+
   // create form
   const [slug, setSlug] = useState("");
 
