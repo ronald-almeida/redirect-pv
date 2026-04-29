@@ -49,6 +49,20 @@ function SlugPage() {
         return;
       }
 
+      // waiting mode → redirect to the global default waiting URL
+      const { data: settings } = await supabase
+        .from("settings")
+        .select("default_waiting_url")
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (settings?.default_waiting_url) {
+        window.location.replace(settings.default_waiting_url);
+        return;
+      }
+
       setLink(data);
       setLoading(false);
     };
