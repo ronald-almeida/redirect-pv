@@ -6,14 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Copy, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { Copy, Trash2, ExternalLink, Save, Settings2 } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -33,10 +26,14 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
+type Mode = "real" | "decoy" | "waiting";
+
 interface LinkRow {
   id: string;
   slug: string;
-  destination: string | null;
+  mode: string;
+  real_url: string | null;
+  decoy_url: string | null;
   page_title: string | null;
   page_message: string | null;
   page_icon: string | null;
@@ -49,6 +46,27 @@ const DEFAULTS = {
   page_icon: "⏳",
 };
 
+const MODE_META: Record<Mode, { label: string; classes: string; dot: string }> = {
+  real: {
+    label: "Real",
+    classes:
+      "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900",
+    dot: "bg-emerald-500",
+  },
+  decoy: {
+    label: "Decoy",
+    classes:
+      "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900",
+    dot: "bg-amber-500",
+  },
+  waiting: {
+    label: "Waiting",
+    classes:
+      "bg-muted text-muted-foreground border-border",
+    dot: "bg-muted-foreground/60",
+  },
+};
+
 function AdminPage() {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
@@ -57,11 +75,9 @@ function AdminPage() {
 
   // create form
   const [slug, setSlug] = useState("");
-  const [destination, setDestination] = useState("");
 
-  // edit dialog
+  // page-content edit dialog
   const [editing, setEditing] = useState<LinkRow | null>(null);
-  const [eDestination, setEDestination] = useState("");
   const [eTitle, setETitle] = useState("");
   const [eMessage, setEMessage] = useState("");
   const [eIcon, setEIcon] = useState("");
@@ -95,7 +111,7 @@ function AdminPage() {
       console.error(error);
       return;
     }
-    setLinks(data ?? []);
+    setLinks((data ?? []) as LinkRow[]);
   };
 
   const handleCreate = async (e: FormEvent) => {
@@ -104,14 +120,13 @@ function AdminPage() {
     if (!cleanSlug) return;
     const { error } = await supabase.from("links").insert({
       slug: cleanSlug,
-      destination: destination.trim() || null,
+      mode: "waiting",
     });
     if (error) {
       alert(error.message);
       return;
     }
     setSlug("");
-    setDestination("");
     load();
   };
 
@@ -125,21 +140,52 @@ function AdminPage() {
     load();
   };
 
+  const updateLink = (id: string, patch: Partial<LinkRow>) => {
+    setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  };
+
+  const persistLink = async (l: LinkRow) => {
+    const { error } = await supabase
+      .from("links")
+      .update({
+        slug: l.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, ""),
+        mode: l.mode,
+        real_url: l.real_url?.trim() || null,
+        decoy_url: l.decoy_url?.trim() || null,
+      })
+      .eq("id", l.id);
+    if (error) {
+      alert(error.message);
+      load();
+      return;
+    }
+  };
+
+  const setMode = async (l: LinkRow, mode: Mode) => {
+    updateLink(l.id, { mode });
+    const { error } = await supabase
+      .from("links")
+      .update({ mode })
+      .eq("id", l.id);
+    if (error) {
+      alert(error.message);
+      load();
+    }
+  };
+
   const openEdit = (l: LinkRow) => {
     setEditing(l);
-    setEDestination(l.destination ?? "");
     setETitle(l.page_title ?? DEFAULTS.page_title);
     setEMessage(l.page_message ?? DEFAULTS.page_message);
     setEIcon(l.page_icon ?? DEFAULTS.page_icon);
   };
 
-  const handleUpdate = async (e: FormEvent) => {
+  const handleUpdatePage = async (e: FormEvent) => {
     e.preventDefault();
     if (!editing) return;
     const { error } = await supabase
       .from("links")
       .update({
-        destination: eDestination.trim() || null,
         page_title: eTitle.trim() || DEFAULTS.page_title,
         page_message: eMessage.trim() || DEFAULTS.page_message,
         page_icon: eIcon.trim() || DEFAULTS.page_icon,
@@ -154,7 +200,7 @@ function AdminPage() {
   };
 
   const copyLink = (slug: string) => {
-    navigator.clipboard.writeText(`${origin}/${slug}`);
+    navigator.clipboard.writeText(`${origin}/r/${slug}`);
   };
 
   const handleSignOut = async () => {
@@ -186,9 +232,9 @@ function AdminPage() {
           <h2 className="mb-4 text-base font-medium">Create new link</h2>
           <form
             onSubmit={handleCreate}
-            className="grid gap-4 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
+            className="flex flex-col gap-3 sm:flex-row sm:items-end"
           >
-            <div className="space-y-2">
+            <div className="flex-1 space-y-2">
               <Label htmlFor="slug">Slug</Label>
               <Input
                 id="slug"
@@ -198,121 +244,152 @@ function AdminPage() {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="destination">Destination URL (optional)</Label>
-              <Input
-                id="destination"
-                type="url"
-                placeholder="https://example.com"
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-              />
-            </div>
             <Button type="submit">Create</Button>
           </form>
+          <p className="mt-3 text-xs text-muted-foreground">
+            New links start in <span className="font-medium">Waiting</span> mode.
+          </p>
         </Card>
 
-        <Card className="p-6">
-          <h2 className="mb-4 text-base font-medium">All links</h2>
+        <div className="space-y-4">
+          <h2 className="text-base font-medium">All links</h2>
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : links.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No links yet.</p>
+            <Card className="p-6">
+              <p className="text-sm text-muted-foreground">No links yet.</p>
+            </Card>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Slug</TableHead>
-                    <TableHead>Destination</TableHead>
-                    <TableHead className="w-[220px] text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {links.map((l) => (
-                    <TableRow key={l.id}>
-                      <TableCell className="font-mono text-sm">/{l.slug}</TableCell>
-                      <TableCell className="max-w-md truncate text-sm">
-                        {l.destination ? (
-                          <span className="text-foreground">{l.destination}</span>
-                        ) : (
-                          <span className="text-muted-foreground italic">
-                            Not set — shows waiting page
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => copyLink(l.slug)}
-                            title="Copy link"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            asChild
-                            title="Open"
-                          >
-                            <a
-                              href={`/${l.slug}`}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => openEdit(l)}
-                            title="Edit"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleDelete(l.id)}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            links.map((l) => {
+              const mode = (l.mode as Mode) ?? "waiting";
+              const meta = MODE_META[mode];
+              return (
+                <Card key={l.id} className="p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Input
+                        value={l.slug}
+                        onChange={(e) =>
+                          updateLink(l.id, { slug: e.target.value })
+                        }
+                        onBlur={() => persistLink(l)}
+                        className="h-8 w-44 font-mono text-sm"
+                      />
+                      <Badge
+                        variant="outline"
+                        className={`gap-1.5 ${meta.classes}`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${meta.dot}`}
+                        />
+                        {meta.label}
+                      </Badge>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => copyLink(l.slug)}
+                        title="Copy link"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" asChild title="Open">
+                        <a
+                          href={`/r/${l.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => openEdit(l)}
+                        title="Edit waiting page"
+                      >
+                        <Settings2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDelete(l.id)}
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {(["real", "decoy", "waiting"] as Mode[]).map((m) => {
+                      const active = mode === m;
+                      const mm = MODE_META[m];
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setMode(l, m)}
+                          className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                            active
+                              ? mm.classes + " font-medium"
+                              : "bg-background hover:bg-muted/50"
+                          }`}
+                        >
+                          <span className={`h-2 w-2 rounded-full ${mm.dot}`} />
+                          {mm.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Real URL</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="url"
+                          placeholder="https://real-destination.com"
+                          value={l.real_url ?? ""}
+                          onChange={(e) =>
+                            updateLink(l.id, { real_url: e.target.value })
+                          }
+                          onBlur={() => persistLink(l)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Decoy URL</Label>
+                      <Input
+                        type="url"
+                        placeholder="https://decoy-site.com"
+                        value={l.decoy_url ?? ""}
+                        onChange={(e) =>
+                          updateLink(l.id, { decoy_url: e.target.value })
+                        }
+                        onBlur={() => persistLink(l)}
+                      />
+                    </div>
+                  </div>
+
+                  <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Save className="h-3 w-3" />
+                    Changes save when you click outside a field.
+                  </p>
+                </Card>
+              );
+            })
           )}
-        </Card>
+        </div>
       </main>
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Edit /{editing?.slug}
-            </DialogTitle>
+            <DialogTitle>Waiting page · /{editing?.slug}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleUpdate} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="e-dest">Destination URL</Label>
-              <Input
-                id="e-dest"
-                type="url"
-                placeholder="https://example.com"
-                value={eDestination}
-                onChange={(e) => setEDestination(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Leave blank to show the waiting page.
-              </p>
-            </div>
+          <form onSubmit={handleUpdatePage} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-[80px_1fr]">
               <div className="space-y-2">
                 <Label htmlFor="e-icon">Icon</Label>
@@ -324,7 +401,7 @@ function AdminPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="e-title">Waiting page title</Label>
+                <Label htmlFor="e-title">Title</Label>
                 <Input
                   id="e-title"
                   value={eTitle}
@@ -333,7 +410,7 @@ function AdminPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="e-msg">Waiting page message</Label>
+              <Label htmlFor="e-msg">Message</Label>
               <Textarea
                 id="e-msg"
                 rows={3}
