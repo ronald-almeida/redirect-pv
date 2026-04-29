@@ -20,7 +20,7 @@ export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
       { title: "Admin · Links" },
-      { name: "description", content: "Manage redirect links." },
+      { name: "description", content: "Gerenciar links de redirecionamento." },
     ],
   }),
   component: AdminPage,
@@ -41,8 +41,8 @@ interface LinkRow {
 }
 
 const DEFAULTS = {
-  page_title: "Link coming soon",
-  page_message: "This link is being set up. Check back soon.",
+  page_title: "Link em breve",
+  page_message: "Este link está sendo configurado. Volte em breve.",
   page_icon: "⏳",
 };
 
@@ -54,13 +54,13 @@ const MODE_META: Record<Mode, { label: string; classes: string; dot: string }> =
     dot: "bg-emerald-500",
   },
   decoy: {
-    label: "Decoy",
+    label: "Isca",
     classes:
       "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900",
     dot: "bg-amber-500",
   },
   waiting: {
-    label: "Waiting",
+    label: "Espera",
     classes:
       "bg-muted text-muted-foreground border-border",
     dot: "bg-muted-foreground/60",
@@ -73,15 +73,12 @@ function AdminPage() {
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // global settings
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [defaultWaitingUrl, setDefaultWaitingUrl] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
 
-  // create form
   const [slug, setSlug] = useState("");
 
-  // page-content edit dialog
   const [editing, setEditing] = useState<LinkRow | null>(null);
   const [eTitle, setETitle] = useState("");
   const [eMessage, setEMessage] = useState("");
@@ -164,7 +161,7 @@ function AdminPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this link?")) return;
+    if (!confirm("Remover este link?")) return;
     const { error } = await supabase.from("links").delete().eq("id", id);
     if (error) {
       alert(error.message);
@@ -244,7 +241,7 @@ function AdminPage() {
   if (checking) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Loading…
+        Carregando…
       </div>
     );
   }
@@ -253,25 +250,25 @@ function AdminPage() {
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <h1 className="text-lg font-semibold">Link admin</h1>
+          <h1 className="text-lg font-semibold">Painel de links</h1>
           <Button variant="ghost" size="sm" onClick={handleSignOut}>
-            Sign out
+            Sair
           </Button>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl space-y-8 px-6 py-8">
         <Card className="p-6">
-          <h2 className="mb-1 text-base font-medium">Global settings</h2>
+          <h2 className="mb-1 text-base font-medium">Configurações Globais</h2>
           <p className="mb-4 text-xs text-muted-foreground">
-            URL where users in <span className="font-medium">Waiting</span> mode are redirected.
+            URL para onde os usuários em modo <span className="font-medium">Espera</span> são redirecionados.
           </p>
           <div className="space-y-2">
-            <Label htmlFor="default-waiting-url">Default waiting URL</Label>
+            <Label htmlFor="default-waiting-url">Link padrão de espera</Label>
             <Input
               id="default-waiting-url"
               type="url"
-              placeholder="https://example.com"
+              placeholder="https://exemplo.com"
               value={defaultWaitingUrl}
               onChange={(e) => setDefaultWaitingUrl(e.target.value)}
               onBlur={saveSettings}
@@ -279,13 +276,13 @@ function AdminPage() {
             />
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Save className="h-3 w-3" />
-              {savingSettings ? "Saving…" : "Saves automatically when you click outside the field."}
+              {savingSettings ? "Salvando…" : "Salva automaticamente ao clicar fora do campo."}
             </p>
           </div>
         </Card>
 
         <Card className="p-6">
-          <h2 className="mb-4 text-base font-medium">Create new link</h2>
+          <h2 className="mb-4 text-base font-medium">Adicionar link</h2>
           <form
             onSubmit={handleCreate}
             className="flex flex-col gap-3 sm:flex-row sm:items-end"
@@ -294,26 +291,26 @@ function AdminPage() {
               <Label htmlFor="slug">Slug</Label>
               <Input
                 id="slug"
-                placeholder="my-link"
+                placeholder="meu-link"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
                 required
               />
             </div>
-            <Button type="submit">Create</Button>
+            <Button type="submit">Adicionar link</Button>
           </form>
           <p className="mt-3 text-xs text-muted-foreground">
-            New links start in <span className="font-medium">Waiting</span> mode.
+            Novos links começam no modo <span className="font-medium">Espera</span>.
           </p>
         </Card>
 
         <div className="space-y-4">
-          <h2 className="text-base font-medium">All links</h2>
+          <h2 className="text-base font-medium">Todos os links</h2>
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p className="text-sm text-muted-foreground">Carregando…</p>
           ) : links.length === 0 ? (
             <Card className="p-6">
-              <p className="text-sm text-muted-foreground">No links yet.</p>
+              <p className="text-sm text-muted-foreground">Nenhum link ainda.</p>
             </Card>
           ) : (
             links.map((l) => {
@@ -346,11 +343,11 @@ function AdminPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => copyLink(l.slug)}
-                        title="Copy link"
+                        title="Copiar link"
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" asChild title="Open">
+                      <Button size="icon" variant="ghost" asChild title="Abrir">
                         <a
                           href={`/r/${l.slug}`}
                           target="_blank"
@@ -363,7 +360,7 @@ function AdminPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => openEdit(l)}
-                        title="Edit waiting page"
+                        title="Editar página de espera"
                       >
                         <Settings2 className="h-4 w-4" />
                       </Button>
@@ -371,42 +368,45 @@ function AdminPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => handleDelete(l.id)}
-                        title="Delete"
+                        title="Remover"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    {(["real", "decoy", "waiting"] as Mode[]).map((m) => {
-                      const active = mode === m;
-                      const mm = MODE_META[m];
-                      return (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setMode(l, m)}
-                          className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
-                            active
-                              ? mm.classes + " font-medium"
-                              : "bg-background hover:bg-muted/50"
-                          }`}
-                        >
-                          <span className={`h-2 w-2 rounded-full ${mm.dot}`} />
-                          {mm.label}
-                        </button>
-                      );
-                    })}
+                  <div className="mt-4">
+                    <Label className="mb-2 block text-xs">Modo</Label>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {(["real", "decoy", "waiting"] as Mode[]).map((m) => {
+                        const active = mode === m;
+                        const mm = MODE_META[m];
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setMode(l, m)}
+                            className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                              active
+                                ? mm.classes + " font-medium"
+                                : "bg-background hover:bg-muted/50"
+                            }`}
+                          >
+                            <span className={`h-2 w-2 rounded-full ${mm.dot}`} />
+                            {mm.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Real URL</Label>
+                      <Label className="text-xs">Link real</Label>
                       <div className="flex gap-2">
                         <Input
                           type="url"
-                          placeholder="https://real-destination.com"
+                          placeholder="https://destino-real.com"
                           value={l.real_url ?? ""}
                           onChange={(e) =>
                             updateLink(l.id, { real_url: e.target.value })
@@ -416,10 +416,10 @@ function AdminPage() {
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Decoy URL</Label>
+                      <Label className="text-xs">Link isca</Label>
                       <Input
                         type="url"
-                        placeholder="https://decoy-site.com"
+                        placeholder="https://site-isca.com"
                         value={l.decoy_url ?? ""}
                         onChange={(e) =>
                           updateLink(l.id, { decoy_url: e.target.value })
@@ -431,7 +431,7 @@ function AdminPage() {
 
                   <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Save className="h-3 w-3" />
-                    Changes save when you click outside a field.
+                    As alterações são salvas ao clicar fora do campo.
                   </p>
                 </Card>
               );
@@ -443,12 +443,12 @@ function AdminPage() {
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Waiting page · /{editing?.slug}</DialogTitle>
+            <DialogTitle>Página de espera · /{editing?.slug}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleUpdatePage} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-[80px_1fr]">
               <div className="space-y-2">
-                <Label htmlFor="e-icon">Icon</Label>
+                <Label htmlFor="e-icon">Ícone</Label>
                 <Input
                   id="e-icon"
                   value={eIcon}
@@ -457,7 +457,7 @@ function AdminPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="e-title">Title</Label>
+                <Label htmlFor="e-title">Título</Label>
                 <Input
                   id="e-title"
                   value={eTitle}
@@ -466,7 +466,7 @@ function AdminPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="e-msg">Message</Label>
+              <Label htmlFor="e-msg">Mensagem</Label>
               <Textarea
                 id="e-msg"
                 rows={3}
@@ -480,9 +480,9 @@ function AdminPage() {
                 variant="ghost"
                 onClick={() => setEditing(null)}
               >
-                Cancel
+                Cancelar
               </Button>
-              <Button type="submit">Save</Button>
+              <Button type="submit">Salvar</Button>
             </DialogFooter>
           </form>
         </DialogContent>
