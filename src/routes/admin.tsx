@@ -73,6 +73,11 @@ function AdminPage() {
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // global settings
+  const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [defaultWaitingUrl, setDefaultWaitingUrl] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+
   // create form
   const [slug, setSlug] = useState("");
 
@@ -93,6 +98,7 @@ function AdminPage() {
       }
       setChecking(false);
       load();
+      loadSettings();
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (!session) navigate({ to: "/login" });
@@ -112,6 +118,33 @@ function AdminPage() {
       return;
     }
     setLinks((data ?? []) as LinkRow[]);
+  };
+
+  const loadSettings = async () => {
+    const { data, error } = await supabase
+      .from("settings")
+      .select("id, default_waiting_url")
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      console.error(error);
+      return;
+    }
+    if (data) {
+      setSettingsId(data.id);
+      setDefaultWaitingUrl(data.default_waiting_url ?? "");
+    }
+  };
+
+  const saveSettings = async () => {
+    if (!settingsId) return;
+    setSavingSettings(true);
+    const { error } = await supabase
+      .from("settings")
+      .update({ default_waiting_url: defaultWaitingUrl.trim() })
+      .eq("id", settingsId);
+    setSavingSettings(false);
+    if (error) alert(error.message);
   };
 
   const handleCreate = async (e: FormEvent) => {
@@ -228,6 +261,29 @@ function AdminPage() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-8 px-6 py-8">
+        <Card className="p-6">
+          <h2 className="mb-1 text-base font-medium">Global settings</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            URL where users in <span className="font-medium">Waiting</span> mode are redirected.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="default-waiting-url">Default waiting URL</Label>
+            <Input
+              id="default-waiting-url"
+              type="url"
+              placeholder="https://example.com"
+              value={defaultWaitingUrl}
+              onChange={(e) => setDefaultWaitingUrl(e.target.value)}
+              onBlur={saveSettings}
+              disabled={!settingsId || savingSettings}
+            />
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Save className="h-3 w-3" />
+              {savingSettings ? "Saving…" : "Saves automatically when you click outside the field."}
+            </p>
+          </div>
+        </Card>
+
         <Card className="p-6">
           <h2 className="mb-4 text-base font-medium">Create new link</h2>
           <form
