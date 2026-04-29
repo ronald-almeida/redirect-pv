@@ -98,6 +98,7 @@ function AdminPage() {
       }
       setChecking(false);
       load();
+      loadSettings();
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (!session) navigate({ to: "/login" });
