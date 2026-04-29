@@ -120,6 +120,33 @@ function AdminPage() {
     setLinks((data ?? []) as LinkRow[]);
   };
 
+  const loadSettings = async () => {
+    const { data, error } = await supabase
+      .from("settings")
+      .select("id, default_waiting_url")
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      console.error(error);
+      return;
+    }
+    if (data) {
+      setSettingsId(data.id);
+      setDefaultWaitingUrl(data.default_waiting_url ?? "");
+    }
+  };
+
+  const saveSettings = async () => {
+    if (!settingsId) return;
+    setSavingSettings(true);
+    const { error } = await supabase
+      .from("settings")
+      .update({ default_waiting_url: defaultWaitingUrl.trim() })
+      .eq("id", settingsId);
+    setSavingSettings(false);
+    if (error) alert(error.message);
+  };
+
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
