@@ -2,13 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/$slug")({
+export const Route = createFileRoute("/r/$slug")({
   component: SlugPage,
 });
 
 interface LinkRow {
   slug: string;
-  destination: string | null;
+  mode: string;
+  real_url: string | null;
+  decoy_url: string | null;
   page_title: string | null;
   page_message: string | null;
   page_icon: string | null;
@@ -26,7 +28,7 @@ function SlugPage() {
     const fetchLink = async () => {
       const { data, error } = await supabase
         .from("links")
-        .select("slug,destination,page_title,page_message,page_icon")
+        .select("slug,mode,real_url,decoy_url,page_title,page_message,page_icon")
         .eq("slug", slug)
         .maybeSingle();
 
@@ -38,8 +40,12 @@ function SlugPage() {
         return;
       }
 
-      if (data.destination) {
-        window.location.replace(data.destination);
+      if (data.mode === "real" && data.real_url) {
+        window.location.replace(data.real_url);
+        return;
+      }
+      if (data.mode === "decoy" && data.decoy_url) {
+        window.location.replace(data.decoy_url);
         return;
       }
 
@@ -48,8 +54,6 @@ function SlugPage() {
     };
 
     fetchLink();
-
-    // auto-refresh every 30s while waiting
     const interval = setInterval(fetchLink, 30000);
     return () => {
       cancelled = true;
@@ -91,8 +95,7 @@ function SlugPage() {
           {link?.page_title ?? "Link coming soon"}
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          {link?.page_message ??
-            "This link is being set up. Check back soon."}
+          {link?.page_message ?? "This link is being set up. Check back soon."}
         </p>
         <div className="mt-8 flex justify-center">
           <div

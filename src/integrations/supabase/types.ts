@@ -17,29 +17,35 @@ export type Database = {
       links: {
         Row: {
           created_at: string
-          destination: string | null
+          decoy_url: string | null
           id: string
+          mode: string
           page_icon: string | null
           page_message: string | null
           page_title: string | null
+          real_url: string | null
           slug: string
         }
         Insert: {
           created_at?: string
-          destination?: string | null
+          decoy_url?: string | null
           id?: string
+          mode?: string
           page_icon?: string | null
           page_message?: string | null
           page_title?: string | null
+          real_url?: string | null
           slug: string
         }
         Update: {
           created_at?: string
-          destination?: string | null
+          decoy_url?: string | null
           id?: string
+          mode?: string
           page_icon?: string | null
           page_message?: string | null
           page_title?: string | null
+          real_url?: string | null
           slug?: string
         }
         Relationships: []

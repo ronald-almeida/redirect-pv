@@ -11,8 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminRouteImport } from './routes/admin'
-import { Route as SlugRouteImport } from './routes/$slug'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RSlugRouteImport } from './routes/r.$slug'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -24,49 +24,49 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SlugRoute = SlugRouteImport.update({
-  id: '/$slug',
-  path: '/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RSlugRoute = RSlugRouteImport.update({
+  id: '/r/$slug',
+  path: '/r/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/$slug': typeof SlugRoute
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
+  '/r/$slug': typeof RSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/$slug': typeof SlugRoute
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
+  '/r/$slug': typeof RSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/$slug': typeof SlugRoute
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
+  '/r/$slug': typeof RSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$slug' | '/admin' | '/login'
+  fullPaths: '/' | '/admin' | '/login' | '/r/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$slug' | '/admin' | '/login'
-  id: '__root__' | '/' | '/$slug' | '/admin' | '/login'
+  to: '/' | '/admin' | '/login' | '/r/$slug'
+  id: '__root__' | '/' | '/admin' | '/login' | '/r/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SlugRoute: typeof SlugRoute
   AdminRoute: typeof AdminRoute
   LoginRoute: typeof LoginRoute
+  RSlugRoute: typeof RSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -85,13 +85,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/$slug': {
-      id: '/$slug'
-      path: '/$slug'
-      fullPath: '/$slug'
-      preLoaderRoute: typeof SlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -99,14 +92,21 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/r/$slug': {
+      id: '/r/$slug'
+      path: '/r/$slug'
+      fullPath: '/r/$slug'
+      preLoaderRoute: typeof RSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SlugRoute: SlugRoute,
   AdminRoute: AdminRoute,
   LoginRoute: LoginRoute,
+  RSlugRoute: RSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
