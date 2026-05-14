@@ -16,22 +16,43 @@ export type Database = {
     Tables: {
       clicks: {
         Row: {
+          country: string | null
           created_at: string
+          device: string | null
           id: string
+          ip: string | null
+          is_vpn: boolean
           link_id: string
           mode_at_click: string
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
         }
         Insert: {
+          country?: string | null
           created_at?: string
+          device?: string | null
           id?: string
+          ip?: string | null
+          is_vpn?: boolean
           link_id: string
           mode_at_click: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
         }
         Update: {
+          country?: string | null
           created_at?: string
+          device?: string | null
           id?: string
+          ip?: string | null
+          is_vpn?: boolean
           link_id?: string
           mode_at_click?: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
         }
         Relationships: [
           {
@@ -45,36 +66,66 @@ export type Database = {
       }
       links: {
         Row: {
+          ab_test: boolean
+          access_password: string | null
+          active: boolean
+          allowed_countries: string[] | null
+          blocked_ips: string[] | null
+          click_count: number
+          click_limit: number | null
           created_at: string
           decoy_url: string | null
+          expires_at: string | null
           id: string
           mode: string
           page_icon: string | null
           page_message: string | null
           page_title: string | null
           real_url: string | null
+          real_urls: string[] | null
+          rotation_index: number
           slug: string
         }
         Insert: {
+          ab_test?: boolean
+          access_password?: string | null
+          active?: boolean
+          allowed_countries?: string[] | null
+          blocked_ips?: string[] | null
+          click_count?: number
+          click_limit?: number | null
           created_at?: string
           decoy_url?: string | null
+          expires_at?: string | null
           id?: string
           mode?: string
           page_icon?: string | null
           page_message?: string | null
           page_title?: string | null
           real_url?: string | null
+          real_urls?: string[] | null
+          rotation_index?: number
           slug: string
         }
         Update: {
+          ab_test?: boolean
+          access_password?: string | null
+          active?: boolean
+          allowed_countries?: string[] | null
+          blocked_ips?: string[] | null
+          click_count?: number
+          click_limit?: number | null
           created_at?: string
           decoy_url?: string | null
+          expires_at?: string | null
           id?: string
           mode?: string
           page_icon?: string | null
           page_message?: string | null
           page_title?: string | null
           real_url?: string | null
+          real_urls?: string[] | null
+          rotation_index?: number
           slug?: string
         }
         Relationships: []
@@ -102,7 +153,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_link_click: { Args: { _link_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
