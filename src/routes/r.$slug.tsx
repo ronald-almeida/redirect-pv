@@ -130,18 +130,25 @@ function trackInBackground(linkId: string, modeAtClick: string) {
     });
 }
 
-async function getWaitingUrl(): Promise<string | null> {
+function getWaitingUrlSync(): string | null {
   if (cachedWaitingUrl && Date.now() - cachedWaitingUrl.ts < CACHE_TTL) {
     return cachedWaitingUrl.url;
   }
-  const { data } = await supabase
-    .from("settings")
-    .select("default_waiting_url")
-    .limit(1)
-    .maybeSingle();
-  const url = data?.default_waiting_url ?? null;
-  cachedWaitingUrl = { url, ts: Date.now() };
-  return url;
+  return null;
+}
+
+function getWaitingUrl(): Promise<string | null> {
+  const cached = getWaitingUrlSync();
+  if (cached !== null) return Promise.resolve(cached);
+  if (waitingUrlPromise) return waitingUrlPromise;
+  waitingUrlPromise = Promise.resolve(
+    supabase.from("settings").select("default_waiting_url").limit(1).maybeSingle(),
+  ).then(({ data }) => {
+    const url = data?.default_waiting_url ?? null;
+    cachedWaitingUrl = { url, ts: Date.now() };
+    return url;
+  });
+  return waitingUrlPromise;
 }
 
 function SlugPage() {
