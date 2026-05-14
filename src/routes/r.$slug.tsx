@@ -8,7 +8,6 @@ export const Route = createFileRoute("/r/$slug")({
 
 interface LinkRow {
   id: string;
-  slug: string;
   mode: string;
   real_url: string | null;
   decoy_url: string | null;
@@ -22,13 +21,11 @@ interface LinkRow {
   real_urls: string[] | null;
   ab_test: boolean;
   rotation_index: number;
-  page_title?: string | null;
-  page_message?: string | null;
-  page_icon?: string | null;
 }
 
+// Minimum columns needed to decide where to redirect
 const LINK_COLUMNS =
-  "id, slug, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, access_password, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index, page_title, page_message, page_icon";
+  "id, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, access_password, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index";
 
 const BOT_REGEX =
   /bot|crawler|spider|crawling|facebookexternalhit|slurp|bingpreview|whatsapp|telegram|discord|slack|linkedin|embedly|preview|fetch|monitor|curl|wget|python-requests|httpclient|axios|headless/i;
