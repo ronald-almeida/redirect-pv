@@ -34,6 +34,22 @@ const BOT_REGEX =
 const CACHE_TTL = 30_000;
 const linkCache = new Map<string, { row: LinkRow; ts: number }>();
 let cachedWaitingUrl: { url: string | null; ts: number } | null = null;
+let waitingUrlPromise: Promise<string | null> | null = null;
+
+// Eagerly prefetch the default waiting URL on module load so it's ready
+// in cache by the time the redirect logic needs it.
+if (typeof window !== "undefined") {
+  waitingUrlPromise = supabase
+    .from("settings")
+    .select("default_waiting_url")
+    .limit(1)
+    .maybeSingle()
+    .then(({ data }) => {
+      const url = data?.default_waiting_url ?? null;
+      cachedWaitingUrl = { url, ts: Date.now() };
+      return url;
+    });
+}
 
 function getCachedLink(slug: string): LinkRow | null {
   const hit = linkCache.get(slug);
