@@ -70,12 +70,6 @@ function RootShell({ children }: { children: React.ReactNode }) {
     </html>
   );
 }
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   return <Outlet />;
