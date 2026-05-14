@@ -538,3 +538,25 @@ function AdminPage() {
     </div>
   );
 }
+
+function StatBox({
+  label,
+  value,
+  mode,
+}: {
+  label: string;
+  value: number;
+  mode: Mode;
+}) {
+  const meta = MODE_META[mode];
+  return (
+    <div className={`rounded-md border px-3 py-2 ${meta.classes}`}>
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide opacity-80">
+        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+        {label}
+      </div>
+      <div className="mt-0.5 text-lg font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
