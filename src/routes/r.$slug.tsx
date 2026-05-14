@@ -82,52 +82,49 @@ function getUtmParams() {
   };
 }
 
-// Fire-and-forget tracking. Resolves geo/VPN async, inserts click row, increments counter.
+// Direct REST endpoints with fetch keepalive so requests survive page unload.
+const SUPABASE_URL =
+  (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
+const SUPABASE_KEY =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ?? "";
+
+function postKeepalive(path: string, body: unknown) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return;
+  try {
+    fetch(`${SUPABASE_URL}${path}`, {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(body),
+    }).catch(() => {});
+  } catch {
+    /* noop */
+  }
+}
+
+// Fire-and-forget tracking. Survives page unload via fetch keepalive.
 function trackInBackground(linkId: string, modeAtClick: string) {
   const utm = getUtmParams();
   const device = detectDevice();
 
-  // Increment counter immediately (cheap, doesn't need geo)
-  supabase.rpc("increment_link_click", { _link_id: linkId }).then(() => {});
+  // Increment counter (RPC)
+  postKeepalive("/rest/v1/rpc/increment_link_click", { _link_id: linkId });
 
-  // Geo lookup + insert click — fully async, never awaited
-  fetch("https://ipapi.co/json/")
-    .then((r) => (r.ok ? r.json() : null))
-    .then((j) => {
-      const geo = j
-        ? {
-            ip: j.ip ?? null,
-            country: j.country_code ?? j.country ?? null,
-            is_vpn: Boolean(j.proxy || j.hosting || j.security?.vpn),
-          }
-        : { ip: null, country: null, is_vpn: false };
-      return supabase.from("clicks").insert({
-        link_id: linkId,
-        mode_at_click: modeAtClick,
-        ip: geo.ip,
-        country: geo.country,
-        device,
-        is_vpn: geo.is_vpn,
-        utm_source: utm.utm_source,
-        utm_medium: utm.utm_medium,
-        utm_campaign: utm.utm_campaign,
-      });
-    })
-    .catch(() => {
-      // Best-effort: still log click without geo
-      supabase
-        .from("clicks")
-        .insert({
-          link_id: linkId,
-          mode_at_click: modeAtClick,
-          device,
-          is_vpn: false,
-          utm_source: utm.utm_source,
-          utm_medium: utm.utm_medium,
-          utm_campaign: utm.utm_campaign,
-        })
-        .then(() => {});
-    });
+  // Insert click immediately without waiting for geo
+  postKeepalive("/rest/v1/clicks", {
+    link_id: linkId,
+    mode_at_click: modeAtClick,
+    device,
+    is_vpn: false,
+    utm_source: utm.utm_source,
+    utm_medium: utm.utm_medium,
+    utm_campaign: utm.utm_campaign,
+  });
 }
 
 function getWaitingUrlSync(): string | null {
