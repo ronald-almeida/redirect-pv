@@ -92,7 +92,7 @@ function AdminPage() {
 
   const [origin, setOrigin] = useState("");
 
-  const [stats, setStats] = useState<Record<string, { real: number; decoy: number; waiting: number }>>({});
+  const [stats, setStats] = useState<Record<string, LinkAgg>>({});
 
   useEffect(() => {
     setOrigin(window.location.origin);
