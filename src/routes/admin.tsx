@@ -268,6 +268,7 @@ function AdminPage() {
       .from("links")
       .update({
         slug: l.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, ""),
+        name: l.name?.trim() || null,
         real_url: l.real_url?.trim() || null,
         decoy_url: l.decoy_url?.trim() || null,
       })
