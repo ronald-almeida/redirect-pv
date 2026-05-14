@@ -136,6 +136,24 @@ function AdminPage() {
     }
   };
 
+  const loadStats = async () => {
+    const { data, error } = await supabase
+      .from("clicks")
+      .select("link_id, mode_at_click");
+    if (error) {
+      console.error(error);
+      return;
+    }
+    const agg: Record<string, { real: number; decoy: number; waiting: number }> = {};
+    for (const row of data ?? []) {
+      const id = row.link_id as string;
+      const m = row.mode_at_click as Mode;
+      if (!agg[id]) agg[id] = { real: 0, decoy: 0, waiting: 0 };
+      agg[id][m] = (agg[id][m] ?? 0) + 1;
+    }
+    setStats(agg);
+  };
+
   const saveSettings = async () => {
     if (!settingsId) return;
     setSavingSettings(true);
