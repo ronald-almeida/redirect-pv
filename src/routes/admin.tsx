@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Copy, Trash2, ExternalLink, Save, Settings2 } from "lucide-react";
+import { LinkAnalytics } from "@/components/LinkAnalytics";
+import {
+  type ClickRow,
+  type LinkAgg,
+  aggregate,
+} from "@/lib/analytics";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
