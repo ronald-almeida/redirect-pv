@@ -342,7 +342,11 @@ function AdminPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return links;
-    return links.filter((l) => l.slug.toLowerCase().includes(q));
+    return links.filter(
+      (l) =>
+        l.slug.toLowerCase().includes(q) ||
+        (l.name ?? "").toLowerCase().includes(q),
+    );
   }, [links, search]);
 
   if (checking) {
