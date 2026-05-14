@@ -45,6 +45,7 @@ type Mode = "real" | "decoy" | "waiting";
 interface LinkRow {
   id: string;
   slug: string;
+  name: string | null;
   mode: string;
   real_url: string | null;
   decoy_url: string | null;
@@ -242,6 +243,7 @@ function AdminPage() {
     }
     const { error } = await supabase.from("links").insert({
       slug: candidate,
+      name: l.name,
       mode: l.mode,
       real_url: l.real_url,
       decoy_url: l.decoy_url,
@@ -266,6 +268,7 @@ function AdminPage() {
       .from("links")
       .update({
         slug: l.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, ""),
+        name: l.name?.trim() || null,
         real_url: l.real_url?.trim() || null,
         decoy_url: l.decoy_url?.trim() || null,
       })
@@ -339,7 +342,11 @@ function AdminPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return links;
-    return links.filter((l) => l.slug.toLowerCase().includes(q));
+    return links.filter(
+      (l) =>
+        l.slug.toLowerCase().includes(q) ||
+        (l.name ?? "").toLowerCase().includes(q),
+    );
   }, [links, search]);
 
   if (checking) {
@@ -442,7 +449,7 @@ function AdminPage() {
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar por slug…"
+              placeholder="Buscar por nome ou slug…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="bg-card pl-9"
@@ -499,7 +506,16 @@ function AdminPage() {
 
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="truncate font-mono text-sm">/{l.slug}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-base font-semibold leading-tight">
+                          {l.name?.trim() || `/${l.slug}`}
+                        </div>
+                        {l.name?.trim() && (
+                          <div className="truncate font-mono text-xs text-muted-foreground">
+                            /{l.slug}
+                          </div>
+                        )}
+                      </div>
                       <span
                         className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.activeCls}`}
                       >
@@ -574,6 +590,17 @@ function AdminPage() {
                     <div className="border-t border-border px-5 py-5 animate-fade-in">
                       <div className="grid gap-5 lg:grid-cols-[1fr_auto]">
                         <div className="space-y-4">
+                          <Field label="Nome do link">
+                            <Input
+                              placeholder="Nome do link (ex: Oferta Black Friday)"
+                              value={l.name ?? ""}
+                              onChange={(e) =>
+                                updateLink(l.id, { name: e.target.value })
+                              }
+                              onBlur={() => persistLink(l)}
+                              className="bg-background"
+                            />
+                          </Field>
                           <div className="grid gap-3 sm:grid-cols-2">
                             <Field label="Slug">
                               <Input

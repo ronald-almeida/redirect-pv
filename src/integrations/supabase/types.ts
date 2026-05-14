@@ -78,6 +78,7 @@ export type Database = {
           expires_at: string | null
           id: string
           mode: string
+          name: string | null
           page_icon: string | null
           page_message: string | null
           page_title: string | null
@@ -99,6 +100,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           mode?: string
+          name?: string | null
           page_icon?: string | null
           page_message?: string | null
           page_title?: string | null
@@ -120,6 +122,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           mode?: string
+          name?: string | null
           page_icon?: string | null
           page_message?: string | null
           page_title?: string | null

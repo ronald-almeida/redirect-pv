@@ -33,6 +33,7 @@ export const Route = createFileRoute("/admin/analytics")({
 interface LinkLite {
   id: string;
   slug: string;
+  name: string | null;
 }
 
 function AnalyticsPage() {
@@ -85,7 +86,7 @@ function AnalyticsPage() {
         )
         .order("created_at", { ascending: false })
         .limit(1000),
-      supabase.from("links").select("id, slug"),
+      supabase.from("links").select("id, slug, name"),
     ]);
     if (clicksRes.error) console.error("clicks query error", clicksRes.error);
     if (linksRes.error) console.error("links query error", linksRes.error);
@@ -135,12 +136,16 @@ function AnalyticsPage() {
       }
     }
 
-    const slugById = new Map(links.map((l) => [l.id, l.slug]));
-    const topLinks = topEntries(perLink, 5).map(([id, n]) => ({
-      id,
-      slug: slugById.get(id) ?? id.slice(0, 8),
-      count: n,
-    }));
+    const linkById = new Map(links.map((l) => [l.id, l]));
+    const topLinks = topEntries(perLink, 5).map(([id, n]) => {
+      const link = linkById.get(id);
+      return {
+        id,
+        slug: link?.slug ?? id.slice(0, 8),
+        name: link?.name ?? null,
+        count: n,
+      };
+    });
     const topCountries = topEntries(countries, 5);
     const totalDevices = devices.mobile + devices.desktop;
     const chartData = days.map((d) => ({
@@ -244,9 +249,18 @@ function AnalyticsPage() {
                 {data.topLinks.map((l) => (
                   <li
                     key={l.id}
-                    className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm"
+                    className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-sm"
                   >
-                    <span className="font-mono">/{l.slug}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">
+                        {l.name?.trim() || `/${l.slug}`}
+                      </div>
+                      {l.name?.trim() && (
+                        <div className="truncate font-mono text-xs text-muted-foreground">
+                          /{l.slug}
+                        </div>
+                      )}
+                    </div>
                     <span className="tabular-nums font-medium">{l.count}</span>
                   </li>
                 ))}
