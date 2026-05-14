@@ -471,6 +471,12 @@ function AdminPage() {
                     </div>
                   </div>
 
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <StatBox label="Cliques real" value={stats[l.id]?.real ?? 0} mode="real" />
+                    <StatBox label="Cliques isca" value={stats[l.id]?.decoy ?? 0} mode="decoy" />
+                    <StatBox label="Cliques espera" value={stats[l.id]?.waiting ?? 0} mode="waiting" />
+                  </div>
+
                   <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Save className="h-3 w-3" />
                     As alterações são salvas ao clicar fora do campo.
