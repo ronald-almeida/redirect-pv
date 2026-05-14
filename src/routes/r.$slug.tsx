@@ -8,7 +8,6 @@ export const Route = createFileRoute("/r/$slug")({
 
 interface LinkRow {
   id: string;
-  slug: string;
   mode: string;
   real_url: string | null;
   decoy_url: string | null;
@@ -22,13 +21,11 @@ interface LinkRow {
   real_urls: string[] | null;
   ab_test: boolean;
   rotation_index: number;
-  page_title?: string | null;
-  page_message?: string | null;
-  page_icon?: string | null;
 }
 
+// Minimum columns needed to decide where to redirect
 const LINK_COLUMNS =
-  "id, slug, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, access_password, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index, page_title, page_message, page_icon";
+  "id, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, access_password, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index";
 
 const BOT_REGEX =
   /bot|crawler|spider|crawling|facebookexternalhit|slurp|bingpreview|whatsapp|telegram|discord|slack|linkedin|embedly|preview|fetch|monitor|curl|wget|python-requests|httpclient|axios|headless/i;
@@ -37,6 +34,23 @@ const BOT_REGEX =
 const CACHE_TTL = 30_000;
 const linkCache = new Map<string, { row: LinkRow; ts: number }>();
 let cachedWaitingUrl: { url: string | null; ts: number } | null = null;
+let waitingUrlPromise: Promise<string | null> | null = null;
+
+// Eagerly prefetch the default waiting URL on module load so it's ready
+// in cache by the time the redirect logic needs it.
+if (typeof window !== "undefined") {
+  waitingUrlPromise = Promise.resolve(
+    supabase
+      .from("settings")
+      .select("default_waiting_url")
+      .limit(1)
+      .maybeSingle(),
+  ).then(({ data }) => {
+    const url = data?.default_waiting_url ?? null;
+    cachedWaitingUrl = { url, ts: Date.now() };
+    return url;
+  });
+}
 
 function getCachedLink(slug: string): LinkRow | null {
   const hit = linkCache.get(slug);
@@ -68,66 +82,70 @@ function getUtmParams() {
   };
 }
 
-// Fire-and-forget tracking. Resolves geo/VPN async, inserts click row, increments counter.
+// Direct REST endpoints with fetch keepalive so requests survive page unload.
+const SUPABASE_URL =
+  (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
+const SUPABASE_KEY =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ?? "";
+
+function postKeepalive(path: string, body: unknown) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return;
+  try {
+    fetch(`${SUPABASE_URL}${path}`, {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(body),
+    }).catch(() => {});
+  } catch {
+    /* noop */
+  }
+}
+
+// Fire-and-forget tracking. Survives page unload via fetch keepalive.
 function trackInBackground(linkId: string, modeAtClick: string) {
   const utm = getUtmParams();
   const device = detectDevice();
 
-  // Increment counter immediately (cheap, doesn't need geo)
-  supabase.rpc("increment_link_click", { _link_id: linkId }).then(() => {});
+  // Increment counter (RPC)
+  postKeepalive("/rest/v1/rpc/increment_link_click", { _link_id: linkId });
 
-  // Geo lookup + insert click — fully async, never awaited
-  fetch("https://ipapi.co/json/")
-    .then((r) => (r.ok ? r.json() : null))
-    .then((j) => {
-      const geo = j
-        ? {
-            ip: j.ip ?? null,
-            country: j.country_code ?? j.country ?? null,
-            is_vpn: Boolean(j.proxy || j.hosting || j.security?.vpn),
-          }
-        : { ip: null, country: null, is_vpn: false };
-      return supabase.from("clicks").insert({
-        link_id: linkId,
-        mode_at_click: modeAtClick,
-        ip: geo.ip,
-        country: geo.country,
-        device,
-        is_vpn: geo.is_vpn,
-        utm_source: utm.utm_source,
-        utm_medium: utm.utm_medium,
-        utm_campaign: utm.utm_campaign,
-      });
-    })
-    .catch(() => {
-      // Best-effort: still log click without geo
-      supabase
-        .from("clicks")
-        .insert({
-          link_id: linkId,
-          mode_at_click: modeAtClick,
-          device,
-          is_vpn: false,
-          utm_source: utm.utm_source,
-          utm_medium: utm.utm_medium,
-          utm_campaign: utm.utm_campaign,
-        })
-        .then(() => {});
-    });
+  // Insert click immediately without waiting for geo
+  postKeepalive("/rest/v1/clicks", {
+    link_id: linkId,
+    mode_at_click: modeAtClick,
+    device,
+    is_vpn: false,
+    utm_source: utm.utm_source,
+    utm_medium: utm.utm_medium,
+    utm_campaign: utm.utm_campaign,
+  });
 }
 
-async function getWaitingUrl(): Promise<string | null> {
+function getWaitingUrlSync(): string | null {
   if (cachedWaitingUrl && Date.now() - cachedWaitingUrl.ts < CACHE_TTL) {
     return cachedWaitingUrl.url;
   }
-  const { data } = await supabase
-    .from("settings")
-    .select("default_waiting_url")
-    .limit(1)
-    .maybeSingle();
-  const url = data?.default_waiting_url ?? null;
-  cachedWaitingUrl = { url, ts: Date.now() };
-  return url;
+  return null;
+}
+
+function getWaitingUrl(): Promise<string | null> {
+  const cached = getWaitingUrlSync();
+  if (cached !== null) return Promise.resolve(cached);
+  if (waitingUrlPromise) return waitingUrlPromise;
+  waitingUrlPromise = Promise.resolve(
+    supabase.from("settings").select("default_waiting_url").limit(1).maybeSingle(),
+  ).then(({ data }) => {
+    const url = data?.default_waiting_url ?? null;
+    cachedWaitingUrl = { url, ts: Date.now() };
+    return url;
+  });
+  return waitingUrlPromise;
 }
 
 function SlugPage() {
@@ -310,14 +328,12 @@ function SlugPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="max-w-md text-center">
-          <div className="text-6xl" aria-hidden>
-            {link?.page_icon ?? "⏳"}
-          </div>
+          <div className="text-6xl" aria-hidden>⏳</div>
           <h1 className="mt-6 text-2xl font-semibold tracking-tight text-foreground">
-            {link?.page_title ?? "Link em breve"}
+            Link em breve
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            {link?.page_message ?? "Este link está sendo configurado."}
+            Este link está sendo configurado.
           </p>
         </div>
       </div>
