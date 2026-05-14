@@ -57,6 +57,24 @@ function AnalyticsPage() {
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
+  // Realtime: prepend new clicks as they arrive
+  useEffect(() => {
+    const channel = supabase
+      .channel("analytics-clicks-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "clicks" },
+        (payload) => {
+          const r = payload.new as ClickRow;
+          setClicks((prev) => [r, ...prev].slice(0, 1000));
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const loadAll = async () => {
     setLoading(true);
     const [clicksRes, linksRes] = await Promise.all([
