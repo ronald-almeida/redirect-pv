@@ -307,14 +307,12 @@ function SlugPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="max-w-md text-center">
-          <div className="text-6xl" aria-hidden>
-            {link?.page_icon ?? "⏳"}
-          </div>
+          <div className="text-6xl" aria-hidden>⏳</div>
           <h1 className="mt-6 text-2xl font-semibold tracking-tight text-foreground">
-            {link?.page_title ?? "Link em breve"}
+            Link em breve
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            {link?.page_message ?? "Este link está sendo configurado."}
+            Este link está sendo configurado.
           </p>
         </div>
       </div>
