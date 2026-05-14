@@ -7,6 +7,7 @@ export const Route = createFileRoute("/r/$slug")({
 });
 
 interface LinkRow {
+  id: string;
   slug: string;
   mode: string;
   real_url: string | null;
@@ -28,7 +29,7 @@ function SlugPage() {
     const fetchLink = async () => {
       const { data, error } = await supabase
         .from("links")
-        .select("slug,mode,real_url,decoy_url,page_title,page_message,page_icon")
+        .select("id,slug,mode,real_url,decoy_url,page_title,page_message,page_icon")
         .eq("slug", slug)
         .maybeSingle();
 
@@ -40,12 +41,19 @@ function SlugPage() {
         return;
       }
 
+      const trackAndRedirect = async (url: string) => {
+        await supabase
+          .from("clicks")
+          .insert({ link_id: data.id, mode_at_click: data.mode });
+        if (!cancelled) window.location.replace(url);
+      };
+
       if (data.mode === "real" && data.real_url) {
-        window.location.replace(data.real_url);
+        await trackAndRedirect(data.real_url);
         return;
       }
       if (data.mode === "decoy" && data.decoy_url) {
-        window.location.replace(data.decoy_url);
+        await trackAndRedirect(data.decoy_url);
         return;
       }
 
@@ -59,10 +67,16 @@ function SlugPage() {
       if (cancelled) return;
 
       if (settings?.default_waiting_url) {
-        window.location.replace(settings.default_waiting_url);
+        await trackAndRedirect(settings.default_waiting_url);
         return;
       }
 
+      // Fallback: log waiting click and show waiting page
+      await supabase
+        .from("clicks")
+        .insert({ link_id: data.id, mode_at_click: "waiting" });
+
+      if (cancelled) return;
       setLink(data);
       setLoading(false);
     };

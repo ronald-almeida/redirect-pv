@@ -86,6 +86,8 @@ function AdminPage() {
 
   const [origin, setOrigin] = useState("");
 
+  const [stats, setStats] = useState<Record<string, { real: number; decoy: number; waiting: number }>>({});
+
   useEffect(() => {
     setOrigin(window.location.origin);
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -96,6 +98,7 @@ function AdminPage() {
       setChecking(false);
       load();
       loadSettings();
+      loadStats();
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (!session) navigate({ to: "/login" });
@@ -131,6 +134,24 @@ function AdminPage() {
       setSettingsId(data.id);
       setDefaultWaitingUrl(data.default_waiting_url ?? "");
     }
+  };
+
+  const loadStats = async () => {
+    const { data, error } = await supabase
+      .from("clicks")
+      .select("link_id, mode_at_click");
+    if (error) {
+      console.error(error);
+      return;
+    }
+    const agg: Record<string, { real: number; decoy: number; waiting: number }> = {};
+    for (const row of data ?? []) {
+      const id = row.link_id as string;
+      const m = row.mode_at_click as Mode;
+      if (!agg[id]) agg[id] = { real: 0, decoy: 0, waiting: 0 };
+      agg[id][m] = (agg[id][m] ?? 0) + 1;
+    }
+    setStats(agg);
   };
 
   const saveSettings = async () => {
@@ -281,6 +302,27 @@ function AdminPage() {
           </div>
         </Card>
 
+        {(() => {
+          const totals = Object.values(stats).reduce(
+            (acc, s) => ({
+              real: acc.real + s.real,
+              decoy: acc.decoy + s.decoy,
+              waiting: acc.waiting + s.waiting,
+            }),
+            { real: 0, decoy: 0, waiting: 0 },
+          );
+          return (
+            <Card className="p-6">
+              <h2 className="mb-4 text-base font-medium">Resumo de cliques</h2>
+              <div className="grid grid-cols-3 gap-3">
+                <StatBox label="Total real" value={totals.real} mode="real" />
+                <StatBox label="Total isca" value={totals.decoy} mode="decoy" />
+                <StatBox label="Total espera" value={totals.waiting} mode="waiting" />
+              </div>
+            </Card>
+          );
+        })()}
+
         <Card className="p-6">
           <h2 className="mb-4 text-base font-medium">Adicionar link</h2>
           <form
@@ -429,6 +471,12 @@ function AdminPage() {
                     </div>
                   </div>
 
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <StatBox label="Cliques real" value={stats[l.id]?.real ?? 0} mode="real" />
+                    <StatBox label="Cliques isca" value={stats[l.id]?.decoy ?? 0} mode="decoy" />
+                    <StatBox label="Cliques espera" value={stats[l.id]?.waiting ?? 0} mode="waiting" />
+                  </div>
+
                   <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Save className="h-3 w-3" />
                     As alterações são salvas ao clicar fora do campo.
@@ -490,3 +538,25 @@ function AdminPage() {
     </div>
   );
 }
+
+function StatBox({
+  label,
+  value,
+  mode,
+}: {
+  label: string;
+  value: number;
+  mode: Mode;
+}) {
+  const meta = MODE_META[mode];
+  return (
+    <div className={`rounded-md border px-3 py-2 ${meta.classes}`}>
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide opacity-80">
+        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+        {label}
+      </div>
+      <div className="mt-0.5 text-lg font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+}
+

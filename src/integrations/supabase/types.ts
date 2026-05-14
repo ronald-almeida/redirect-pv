@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      clicks: {
+        Row: {
+          created_at: string
+          id: string
+          link_id: string
+          mode_at_click: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link_id: string
+          mode_at_click: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link_id?: string
+          mode_at_click?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       links: {
         Row: {
           created_at: string
