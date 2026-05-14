@@ -243,6 +243,7 @@ function AdminPage() {
     }
     const { error } = await supabase.from("links").insert({
       slug: candidate,
+      name: l.name,
       mode: l.mode,
       real_url: l.real_url,
       decoy_url: l.decoy_url,
