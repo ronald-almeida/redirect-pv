@@ -274,7 +274,20 @@ function AdminPage() {
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <h1 className="text-lg font-semibold">Painel de links</h1>
+          <div className="flex items-center gap-6">
+            <h1 className="text-lg font-semibold">Painel de links</h1>
+            <nav className="flex gap-4 text-sm">
+              <Link to="/admin" className="font-medium text-foreground">
+                Links
+              </Link>
+              <Link
+                to="/admin/analytics"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Analytics
+              </Link>
+            </nav>
+          </div>
           <Button variant="ghost" size="sm" onClick={handleSignOut}>
             Sair
           </Button>
