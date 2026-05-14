@@ -87,6 +87,7 @@ const MODE_META: Record<
 
 function AdminPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [checking, setChecking] = useState(true);
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [loading, setLoading] = useState(false);
