@@ -86,6 +86,8 @@ function AdminPage() {
 
   const [origin, setOrigin] = useState("");
 
+  const [stats, setStats] = useState<Record<string, { real: number; decoy: number; waiting: number }>>({});
+
   useEffect(() => {
     setOrigin(window.location.origin);
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -96,6 +98,7 @@ function AdminPage() {
       setChecking(false);
       load();
       loadSettings();
+      loadStats();
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (!session) navigate({ to: "/login" });
