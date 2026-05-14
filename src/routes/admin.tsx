@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { supabase } from "@/integrations/supabase/client";
@@ -87,6 +87,7 @@ const MODE_META: Record<
 
 function AdminPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [checking, setChecking] = useState(true);
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -327,6 +328,10 @@ function AdminPage() {
         Carregando…
       </div>
     );
+  }
+
+  if (location.pathname !== "/admin") {
+    return <Outlet />;
   }
 
   return (
