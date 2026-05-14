@@ -493,6 +493,8 @@ function AdminPage() {
                     <StatBox label="Cliques espera" value={stats[l.id]?.waiting ?? 0} mode="waiting" />
                   </div>
 
+                  <LinkAnalytics agg={stats[l.id]} />
+
                   <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Save className="h-3 w-3" />
                     As alterações são salvas ao clicar fora do campo.
