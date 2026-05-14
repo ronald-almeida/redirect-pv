@@ -590,6 +590,17 @@ function AdminPage() {
                     <div className="border-t border-border px-5 py-5 animate-fade-in">
                       <div className="grid gap-5 lg:grid-cols-[1fr_auto]">
                         <div className="space-y-4">
+                          <Field label="Nome do link">
+                            <Input
+                              placeholder="Nome do link (ex: Oferta Black Friday)"
+                              value={l.name ?? ""}
+                              onChange={(e) =>
+                                updateLink(l.id, { name: e.target.value })
+                              }
+                              onBlur={() => persistLink(l)}
+                              className="bg-background"
+                            />
+                          </Field>
                           <div className="grid gap-3 sm:grid-cols-2">
                             <Field label="Slug">
                               <Input
