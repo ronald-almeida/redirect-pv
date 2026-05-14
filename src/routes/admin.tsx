@@ -45,6 +45,7 @@ type Mode = "real" | "decoy" | "waiting";
 interface LinkRow {
   id: string;
   slug: string;
+  name: string | null;
   mode: string;
   real_url: string | null;
   decoy_url: string | null;
