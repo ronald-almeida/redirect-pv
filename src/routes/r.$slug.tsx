@@ -39,16 +39,17 @@ let waitingUrlPromise: Promise<string | null> | null = null;
 // Eagerly prefetch the default waiting URL on module load so it's ready
 // in cache by the time the redirect logic needs it.
 if (typeof window !== "undefined") {
-  waitingUrlPromise = supabase
-    .from("settings")
-    .select("default_waiting_url")
-    .limit(1)
-    .maybeSingle()
-    .then(({ data }) => {
-      const url = data?.default_waiting_url ?? null;
-      cachedWaitingUrl = { url, ts: Date.now() };
-      return url;
-    });
+  waitingUrlPromise = Promise.resolve(
+    supabase
+      .from("settings")
+      .select("default_waiting_url")
+      .limit(1)
+      .maybeSingle(),
+  ).then(({ data }) => {
+    const url = data?.default_waiting_url ?? null;
+    cachedWaitingUrl = { url, ts: Date.now() };
+    return url;
+  });
 }
 
 function getCachedLink(slug: string): LinkRow | null {
