@@ -12,9 +12,6 @@ interface LinkRow {
   mode: string;
   real_url: string | null;
   decoy_url: string | null;
-  page_title: string | null;
-  page_message: string | null;
-  page_icon: string | null;
   active: boolean;
   expires_at: string | null;
   click_limit: number | null;
@@ -25,16 +22,32 @@ interface LinkRow {
   real_urls: string[] | null;
   ab_test: boolean;
   rotation_index: number;
+  page_title?: string | null;
+  page_message?: string | null;
+  page_icon?: string | null;
 }
 
-interface GeoInfo {
-  ip: string | null;
-  country: string | null;
-  is_vpn: boolean;
-}
+const LINK_COLUMNS =
+  "id, slug, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, access_password, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index, page_title, page_message, page_icon";
 
 const BOT_REGEX =
   /bot|crawler|spider|crawling|facebookexternalhit|slurp|bingpreview|whatsapp|telegram|discord|slack|linkedin|embedly|preview|fetch|monitor|curl|wget|python-requests|httpclient|axios|headless/i;
+
+// In-memory cache (30s TTL)
+const CACHE_TTL = 30_000;
+const linkCache = new Map<string, { row: LinkRow; ts: number }>();
+let cachedWaitingUrl: { url: string | null; ts: number } | null = null;
+
+function getCachedLink(slug: string): LinkRow | null {
+  const hit = linkCache.get(slug);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.row;
+  if (hit) linkCache.delete(slug);
+  return null;
+}
+
+function setCachedLink(slug: string, row: LinkRow) {
+  linkCache.set(slug, { row, ts: Date.now() });
+}
 
 function detectDevice(): "mobile" | "desktop" {
   if (typeof navigator === "undefined") return "desktop";
@@ -55,30 +68,76 @@ function getUtmParams() {
   };
 }
 
-async function fetchGeo(): Promise<GeoInfo> {
-  try {
-    const res = await fetch("https://ipapi.co/json/");
-    if (!res.ok) throw new Error("geo fetch failed");
-    const j = await res.json();
-    const proxy = Boolean(j.proxy || j.hosting || j.security?.vpn);
-    return {
-      ip: j.ip ?? null,
-      country: j.country_code ?? j.country ?? null,
-      is_vpn: proxy,
-    };
-  } catch {
-    return { ip: null, country: null, is_vpn: false };
+// Fire-and-forget tracking. Resolves geo/VPN async, inserts click row, increments counter.
+function trackInBackground(linkId: string, modeAtClick: string) {
+  const utm = getUtmParams();
+  const device = detectDevice();
+
+  // Increment counter immediately (cheap, doesn't need geo)
+  supabase.rpc("increment_link_click", { _link_id: linkId }).then(() => {});
+
+  // Geo lookup + insert click — fully async, never awaited
+  fetch("https://ipapi.co/json/")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      const geo = j
+        ? {
+            ip: j.ip ?? null,
+            country: j.country_code ?? j.country ?? null,
+            is_vpn: Boolean(j.proxy || j.hosting || j.security?.vpn),
+          }
+        : { ip: null, country: null, is_vpn: false };
+      return supabase.from("clicks").insert({
+        link_id: linkId,
+        mode_at_click: modeAtClick,
+        ip: geo.ip,
+        country: geo.country,
+        device,
+        is_vpn: geo.is_vpn,
+        utm_source: utm.utm_source,
+        utm_medium: utm.utm_medium,
+        utm_campaign: utm.utm_campaign,
+      });
+    })
+    .catch(() => {
+      // Best-effort: still log click without geo
+      supabase
+        .from("clicks")
+        .insert({
+          link_id: linkId,
+          mode_at_click: modeAtClick,
+          device,
+          is_vpn: false,
+          utm_source: utm.utm_source,
+          utm_medium: utm.utm_medium,
+          utm_campaign: utm.utm_campaign,
+        })
+        .then(() => {});
+    });
+}
+
+async function getWaitingUrl(): Promise<string | null> {
+  if (cachedWaitingUrl && Date.now() - cachedWaitingUrl.ts < CACHE_TTL) {
+    return cachedWaitingUrl.url;
   }
+  const { data } = await supabase
+    .from("settings")
+    .select("default_waiting_url")
+    .limit(1)
+    .maybeSingle();
+  const url = data?.default_waiting_url ?? null;
+  cachedWaitingUrl = { url, ts: Date.now() };
+  return url;
 }
 
 function SlugPage() {
   const { slug } = Route.useParams();
   const [link, setLink] = useState<LinkRow | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [pwInput, setPwInput] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
+  const [showWaitingPage, setShowWaitingPage] = useState(false);
   const pendingRealUrl = useRef<string | null>(null);
   const ranRef = useRef(false);
 
@@ -88,130 +147,77 @@ function SlugPage() {
     let cancelled = false;
 
     const run = async () => {
-      const { data, error } = await supabase
-        .from("links")
-        .select("*")
-        .eq("slug", slug)
-        .maybeSingle();
+      // 1. Try cache first
+      let row = getCachedLink(slug);
 
-      if (cancelled) return;
-      if (error || !data) {
-        setNotFound(true);
-        setLoading(false);
-        return;
+      if (!row) {
+        const { data, error } = await supabase
+          .from("links")
+          .select(LINK_COLUMNS)
+          .eq("slug", slug)
+          .maybeSingle();
+
+        if (cancelled) return;
+        if (error || !data) {
+          setNotFound(true);
+          return;
+        }
+        row = data as unknown as LinkRow;
+        setCachedLink(slug, row);
       }
 
-      const row = data as unknown as LinkRow;
       setLink(row);
 
-      const utm = getUtmParams();
-      const device = detectDevice();
       const userAgent =
         typeof navigator !== "undefined" ? navigator.userAgent : "";
       const isBot = BOT_REGEX.test(userAgent);
 
-      const geo = await fetchGeo();
-      if (cancelled) return;
-
-      const trackAndGo = async (url: string, modeAtClick: string) => {
-        await supabase.from("clicks").insert({
-          link_id: row.id,
-          mode_at_click: modeAtClick,
-          ip: geo.ip,
-          country: geo.country,
-          device,
-          is_vpn: geo.is_vpn,
-          utm_source: utm.utm_source,
-          utm_medium: utm.utm_medium,
-          utm_campaign: utm.utm_campaign,
-        });
-        await supabase.rpc("increment_link_click", { _link_id: row.id });
+      const goAndTrack = (url: string, modeAtClick: string) => {
+        trackInBackground(row!.id, modeAtClick);
         if (!cancelled) window.location.replace(url);
       };
 
       const goDecoy = async (reason: string) => {
-        const fallback = row.decoy_url;
-        if (fallback) return trackAndGo(fallback, `decoy:${reason}`);
-        // No decoy configured → fall through to waiting
-        const { data: s } = await supabase
-          .from("settings")
-          .select("default_waiting_url")
-          .limit(1)
-          .maybeSingle();
-        if (s?.default_waiting_url) {
-          return trackAndGo(s.default_waiting_url, `waiting:${reason}`);
-        }
-        setLoading(false);
+        if (row!.decoy_url) return goAndTrack(row!.decoy_url, `decoy:${reason}`);
+        const w = await getWaitingUrl();
+        if (w) return goAndTrack(w, `waiting:${reason}`);
+        setShowWaitingPage(true);
       };
 
-      // 1. inactive
+      // Pre-redirect checks (no geo — VPN/country handled async or skipped)
       if (!row.active) return goDecoy("inactive");
-      // 2. expired
       if (row.expires_at && new Date(row.expires_at).getTime() < Date.now())
         return goDecoy("expired");
-      // 3. blocked IP
-      if (geo.ip && row.blocked_ips?.includes(geo.ip))
-        return goDecoy("blocked_ip");
-      // 4. bot
       if (isBot) return goDecoy("bot");
-      // 5. VPN
-      if (geo.is_vpn) return goDecoy("vpn");
-      // 6. country gate
-      if (
-        row.allowed_countries &&
-        row.allowed_countries.length > 0 &&
-        (!geo.country || !row.allowed_countries.includes(geo.country))
-      ) {
-        return goDecoy("country");
-      }
 
-      // 7. waiting mode
       if (row.mode === "waiting") {
-        const { data: s } = await supabase
-          .from("settings")
-          .select("default_waiting_url")
-          .limit(1)
-          .maybeSingle();
-        if (s?.default_waiting_url)
-          return trackAndGo(s.default_waiting_url, "waiting");
-        setLoading(false);
+        const w = await getWaitingUrl();
+        if (w) return goAndTrack(w, "waiting");
+        setShowWaitingPage(true);
         return;
       }
 
-      // 8. decoy mode
       if (row.mode === "decoy") {
-        if (row.decoy_url) return trackAndGo(row.decoy_url, "decoy");
-        setLoading(false);
+        if (row.decoy_url) return goAndTrack(row.decoy_url, "decoy");
+        setShowWaitingPage(true);
         return;
       }
 
-      // 9. real mode
-      // click_limit reached → switch to waiting
-      if (
-        row.click_limit !== null &&
-        row.click_count >= row.click_limit
-      ) {
-        await supabase
-          .from("links")
-          .update({ mode: "waiting" })
-          .eq("id", row.id);
-        const { data: s } = await supabase
-          .from("settings")
-          .select("default_waiting_url")
-          .limit(1)
-          .maybeSingle();
-        if (s?.default_waiting_url)
-          return trackAndGo(s.default_waiting_url, "waiting");
-        setLoading(false);
+      // real mode
+      if (row.click_limit !== null && row.click_count >= row.click_limit) {
+        supabase.from("links").update({ mode: "waiting" }).eq("id", row.id).then(() => {});
+        const w = await getWaitingUrl();
+        if (w) return goAndTrack(w, "waiting");
+        setShowWaitingPage(true);
         return;
       }
 
-      // pick destination
-      const pool = row.real_urls && row.real_urls.length > 0
-        ? row.real_urls
-        : row.real_url
-          ? [row.real_url]
-          : [];
+      const pool =
+        row.real_urls && row.real_urls.length > 0
+          ? row.real_urls
+          : row.real_url
+            ? [row.real_url]
+            : [];
 
       if (pool.length === 0) return goDecoy("no_real_url");
 
@@ -224,15 +230,13 @@ function SlugPage() {
         dest = pool[0];
       }
 
-      // password gate
       if (row.access_password) {
         pendingRealUrl.current = dest;
         setNeedsPassword(true);
-        setLoading(false);
         return;
       }
 
-      return trackAndGo(dest, "real");
+      return goAndTrack(dest, "real");
     };
 
     run();
@@ -241,38 +245,16 @@ function SlugPage() {
     };
   }, [slug]);
 
-  const submitPassword = async (e: React.FormEvent) => {
+  const submitPassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!link || !pendingRealUrl.current) return;
     if (pwInput !== link.access_password) {
       setPwError("Senha incorreta");
       return;
     }
-    const utm = getUtmParams();
-    const device = detectDevice();
-    const geo = await fetchGeo();
-    await supabase.from("clicks").insert({
-      link_id: link.id,
-      mode_at_click: "real",
-      ip: geo.ip,
-      country: geo.country,
-      device,
-      is_vpn: geo.is_vpn,
-      utm_source: utm.utm_source,
-      utm_medium: utm.utm_medium,
-      utm_campaign: utm.utm_campaign,
-    });
-    await supabase.rpc("increment_link_click", { _link_id: link.id });
+    trackInBackground(link.id, "real");
     window.location.replace(pendingRealUrl.current);
   };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
-      </div>
-    );
-  }
 
   if (notFound) {
     return (
@@ -312,9 +294,7 @@ function SlugPage() {
             className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             placeholder="Senha"
           />
-          {pwError && (
-            <p className="text-sm text-destructive">{pwError}</p>
-          )}
+          {pwError && <p className="text-sm text-destructive">{pwError}</p>}
           <button
             type="submit"
             className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
@@ -326,19 +306,28 @@ function SlugPage() {
     );
   }
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6">
-      <div className="max-w-md text-center">
-        <div className="text-6xl" aria-hidden>
-          {link?.page_icon ?? "⏳"}
+  if (showWaitingPage) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="max-w-md text-center">
+          <div className="text-6xl" aria-hidden>
+            {link?.page_icon ?? "⏳"}
+          </div>
+          <h1 className="mt-6 text-2xl font-semibold tracking-tight text-foreground">
+            {link?.page_title ?? "Link em breve"}
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            {link?.page_message ?? "Este link está sendo configurado."}
+          </p>
         </div>
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-foreground">
-          {link?.page_title ?? "Link em breve"}
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          {link?.page_message ?? "Este link está sendo configurado."}
-        </p>
       </div>
+    );
+  }
+
+  // Instant minimal spinner — no text
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
     </div>
   );
 }
