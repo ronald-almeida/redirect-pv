@@ -33,6 +33,7 @@ export const Route = createFileRoute("/admin/analytics")({
 interface LinkLite {
   id: string;
   slug: string;
+  name: string | null;
 }
 
 function AnalyticsPage() {
