@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Copy, Trash2, ExternalLink, Save, Settings2 } from "lucide-react";
+import { LinkAnalytics } from "@/components/LinkAnalytics";
+import {
+  type ClickRow,
+  type LinkAgg,
+  aggregate,
+} from "@/lib/analytics";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -86,7 +92,7 @@ function AdminPage() {
 
   const [origin, setOrigin] = useState("");
 
-  const [stats, setStats] = useState<Record<string, { real: number; decoy: number; waiting: number }>>({});
+  const [stats, setStats] = useState<Record<string, LinkAgg>>({});
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -139,19 +145,16 @@ function AdminPage() {
   const loadStats = async () => {
     const { data, error } = await supabase
       .from("clicks")
-      .select("link_id, mode_at_click");
+      .select(
+        "link_id, mode_at_click, country, device, is_vpn, utm_source, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(1000);
     if (error) {
       console.error(error);
       return;
     }
-    const agg: Record<string, { real: number; decoy: number; waiting: number }> = {};
-    for (const row of data ?? []) {
-      const id = row.link_id as string;
-      const m = row.mode_at_click as Mode;
-      if (!agg[id]) agg[id] = { real: 0, decoy: 0, waiting: 0 };
-      agg[id][m] = (agg[id][m] ?? 0) + 1;
-    }
-    setStats(agg);
+    setStats(aggregate((data ?? []) as ClickRow[]));
   };
 
   const saveSettings = async () => {
@@ -271,7 +274,20 @@ function AdminPage() {
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <h1 className="text-lg font-semibold">Painel de links</h1>
+          <div className="flex items-center gap-6">
+            <h1 className="text-lg font-semibold">Painel de links</h1>
+            <nav className="flex gap-4 text-sm">
+              <Link to="/admin" className="font-medium text-foreground">
+                Links
+              </Link>
+              <Link
+                to="/admin/analytics"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Analytics
+              </Link>
+            </nav>
+          </div>
           <Button variant="ghost" size="sm" onClick={handleSignOut}>
             Sair
           </Button>
@@ -476,6 +492,8 @@ function AdminPage() {
                     <StatBox label="Cliques isca" value={stats[l.id]?.decoy ?? 0} mode="decoy" />
                     <StatBox label="Cliques espera" value={stats[l.id]?.waiting ?? 0} mode="waiting" />
                   </div>
+
+                  <LinkAnalytics agg={stats[l.id]} />
 
                   <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Save className="h-3 w-3" />
