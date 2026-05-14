@@ -302,6 +302,27 @@ function AdminPage() {
           </div>
         </Card>
 
+        {(() => {
+          const totals = Object.values(stats).reduce(
+            (acc, s) => ({
+              real: acc.real + s.real,
+              decoy: acc.decoy + s.decoy,
+              waiting: acc.waiting + s.waiting,
+            }),
+            { real: 0, decoy: 0, waiting: 0 },
+          );
+          return (
+            <Card className="p-6">
+              <h2 className="mb-4 text-base font-medium">Resumo de cliques</h2>
+              <div className="grid grid-cols-3 gap-3">
+                <StatBox label="Total real" value={totals.real} mode="real" />
+                <StatBox label="Total isca" value={totals.decoy} mode="decoy" />
+                <StatBox label="Total espera" value={totals.waiting} mode="waiting" />
+              </div>
+            </Card>
+          );
+        })()}
+
         <Card className="p-6">
           <h2 className="mb-4 text-base font-medium">Adicionar link</h2>
           <form
