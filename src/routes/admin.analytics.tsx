@@ -249,9 +249,18 @@ function AnalyticsPage() {
                 {data.topLinks.map((l) => (
                   <li
                     key={l.id}
-                    className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm"
+                    className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-sm"
                   >
-                    <span className="font-mono">/{l.slug}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">
+                        {l.name?.trim() || `/${l.slug}`}
+                      </div>
+                      {l.name?.trim() && (
+                        <div className="truncate font-mono text-xs text-muted-foreground">
+                          /{l.slug}
+                        </div>
+                      )}
+                    </div>
                     <span className="tabular-nums font-medium">{l.count}</span>
                   </li>
                 ))}
