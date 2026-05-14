@@ -1,12 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -14,18 +14,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Copy, Trash2, ExternalLink, Save, Settings2 } from "lucide-react";
-import { LinkAnalytics } from "@/components/LinkAnalytics";
 import {
-  type ClickRow,
-  type LinkAgg,
-  aggregate,
-} from "@/lib/analytics";
+  ChevronDown,
+  Copy,
+  Trash2,
+  ExternalLink,
+  Settings2,
+  Search,
+  Plus,
+  LinkIcon,
+  Files,
+  LogOut,
+  Shield,
+} from "lucide-react";
+import { LinkAnalytics } from "@/components/LinkAnalytics";
+import { type ClickRow, type LinkAgg, aggregate } from "@/lib/analytics";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Admin · Links" },
+      { title: "CloakPanel · Links" },
       { name: "description", content: "Gerenciar links de redirecionamento." },
     ],
   }),
@@ -43,6 +51,7 @@ interface LinkRow {
   page_title: string | null;
   page_message: string | null;
   page_icon: string | null;
+  active: boolean;
   created_at: string;
 }
 
@@ -52,23 +61,26 @@ const DEFAULTS = {
   page_icon: "⏳",
 };
 
-const MODE_META: Record<Mode, { label: string; classes: string; dot: string }> = {
+const MODE_META: Record<
+  Mode,
+  { label: string; activeCls: string; dot: string; text: string }
+> = {
   real: {
     label: "Real",
-    classes:
-      "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900",
-    dot: "bg-emerald-500",
+    activeCls: "bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]/40",
+    text: "text-[#22c55e]",
+    dot: "bg-[#22c55e]",
   },
   decoy: {
     label: "Isca",
-    classes:
-      "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900",
-    dot: "bg-amber-500",
+    activeCls: "bg-[#eab308]/15 text-[#eab308] border-[#eab308]/40",
+    text: "text-[#eab308]",
+    dot: "bg-[#eab308]",
   },
   waiting: {
     label: "Espera",
-    classes:
-      "bg-muted text-muted-foreground border-border",
+    activeCls: "bg-muted text-muted-foreground border-border",
+    text: "text-muted-foreground",
     dot: "bg-muted-foreground/60",
   },
 };
@@ -82,8 +94,11 @@ function AdminPage() {
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [defaultWaitingUrl, setDefaultWaitingUrl] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [slug, setSlug] = useState("");
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const [editing, setEditing] = useState<LinkRow | null>(null);
   const [eTitle, setETitle] = useState("");
@@ -172,21 +187,48 @@ function AdminPage() {
     e.preventDefault();
     const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
     if (!cleanSlug) return;
-    const { error } = await supabase.from("links").insert({
-      slug: cleanSlug,
-      mode: "waiting",
-    });
+    const { data, error } = await supabase
+      .from("links")
+      .insert({ slug: cleanSlug, mode: "waiting" })
+      .select()
+      .maybeSingle();
     if (error) {
       alert(error.message);
       return;
     }
     setSlug("");
+    if (data) setExpanded((p) => ({ ...p, [data.id]: true }));
     load();
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Remover este link?")) return;
     const { error } = await supabase.from("links").delete().eq("id", id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    load();
+  };
+
+  const handleDuplicate = async (l: LinkRow) => {
+    const base = l.slug.replace(/-copy(-\d+)?$/, "");
+    let candidate = `${base}-copy`;
+    const existing = new Set(links.map((x) => x.slug));
+    let n = 2;
+    while (existing.has(candidate)) {
+      candidate = `${base}-copy-${n++}`;
+    }
+    const { error } = await supabase.from("links").insert({
+      slug: candidate,
+      mode: l.mode,
+      real_url: l.real_url,
+      decoy_url: l.decoy_url,
+      page_title: l.page_title,
+      page_message: l.page_message,
+      page_icon: l.page_icon,
+      active: l.active,
+    });
     if (error) {
       alert(error.message);
       return;
@@ -203,7 +245,6 @@ function AdminPage() {
       .from("links")
       .update({
         slug: l.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, ""),
-        mode: l.mode,
         real_url: l.real_url?.trim() || null,
         decoy_url: l.decoy_url?.trim() || null,
       })
@@ -220,6 +261,18 @@ function AdminPage() {
     const { error } = await supabase
       .from("links")
       .update({ mode })
+      .eq("id", l.id);
+    if (error) {
+      alert(error.message);
+      load();
+    }
+  };
+
+  const setActive = async (l: LinkRow, active: boolean) => {
+    updateLink(l.id, { active });
+    const { error } = await supabase
+      .from("links")
+      .update({ active })
       .eq("id", l.id);
     if (error) {
       alert(error.message);
@@ -262,6 +315,12 @@ function AdminPage() {
     navigate({ to: "/login" });
   };
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return links;
+    return links.filter((l) => l.slug.toLowerCase().includes(q));
+  }, [links, search]);
+
   if (checking) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
@@ -271,132 +330,172 @@ function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <header className="border-b bg-background">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-6">
-            <h1 className="text-lg font-semibold">Painel de links</h1>
-            <nav className="flex gap-4 text-sm">
-              <Link to="/admin" className="font-medium text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/15 text-primary">
+                <Shield className="h-4 w-4" />
+              </div>
+              <span className="text-base font-semibold tracking-tight">
+                CloakPanel
+              </span>
+            </div>
+            <nav className="flex items-center gap-1 text-sm">
+              <Link
+                to="/admin"
+                className="rounded-md px-3 py-1.5 font-medium text-foreground bg-secondary"
+              >
                 Links
               </Link>
               <Link
                 to="/admin/analytics"
-                className="text-muted-foreground hover:text-foreground"
+                className="rounded-md px-3 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
               >
                 Analytics
               </Link>
             </nav>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleSignOut}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSignOut}
+            className="gap-2"
+          >
+            <LogOut className="h-4 w-4" />
             Sair
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-8 px-6 py-8">
-        <Card className="p-6">
-          <h2 className="mb-1 text-base font-medium">Configurações Globais</h2>
-          <p className="mb-4 text-xs text-muted-foreground">
-            URL para onde os usuários em modo <span className="font-medium">Espera</span> são redirecionados.
-          </p>
-          <div className="space-y-2">
-            <Label htmlFor="default-waiting-url">Link padrão de espera</Label>
-            <Input
-              id="default-waiting-url"
-              type="url"
-              placeholder="https://exemplo.com"
-              value={defaultWaitingUrl}
-              onChange={(e) => setDefaultWaitingUrl(e.target.value)}
-              onBlur={saveSettings}
-              disabled={!settingsId || savingSettings}
-            />
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Save className="h-3 w-3" />
-              {savingSettings ? "Salvando…" : "Salva automaticamente ao clicar fora do campo."}
-            </p>
-          </div>
-        </Card>
-
-        {(() => {
-          const totals = Object.values(stats).reduce(
-            (acc, s) => ({
-              real: acc.real + s.real,
-              decoy: acc.decoy + s.decoy,
-              waiting: acc.waiting + s.waiting,
-            }),
-            { real: 0, decoy: 0, waiting: 0 },
-          );
-          return (
-            <Card className="p-6">
-              <h2 className="mb-4 text-base font-medium">Resumo de cliques</h2>
-              <div className="grid grid-cols-3 gap-3">
-                <StatBox label="Total real" value={totals.real} mode="real" />
-                <StatBox label="Total isca" value={totals.decoy} mode="decoy" />
-                <StatBox label="Total espera" value={totals.waiting} mode="waiting" />
-              </div>
-            </Card>
-          );
-        })()}
-
-        <Card className="p-6">
-          <h2 className="mb-4 text-base font-medium">Adicionar link</h2>
-          <form
-            onSubmit={handleCreate}
-            className="flex flex-col gap-3 sm:flex-row sm:items-end"
+      <main className="mx-auto max-w-6xl space-y-5 px-6 py-8">
+        {/* Global settings collapsible */}
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((o) => !o)}
+            className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-secondary/40"
           >
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="slug">Slug</Label>
-              <Input
-                id="slug"
-                placeholder="meu-link"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                required
-              />
+            <div className="flex items-center gap-2.5">
+              <Settings2 className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Configurações Globais</span>
             </div>
-            <Button type="submit">Adicionar link</Button>
-          </form>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Novos links começam no modo <span className="font-medium">Espera</span>.
-          </p>
-        </Card>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform ${settingsOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+          {settingsOpen && (
+            <div className="border-t border-border px-5 py-4 animate-fade-in">
+              <Label
+                htmlFor="default-waiting-url"
+                className="mb-1.5 block text-xs text-muted-foreground"
+              >
+                Link padrão de espera
+              </Label>
+              <Input
+                id="default-waiting-url"
+                type="url"
+                placeholder="https://exemplo.com"
+                value={defaultWaitingUrl}
+                onChange={(e) => setDefaultWaitingUrl(e.target.value)}
+                onBlur={saveSettings}
+                disabled={!settingsId || savingSettings}
+                className="bg-background"
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                {savingSettings
+                  ? "Salvando…"
+                  : "Salva automaticamente ao clicar fora do campo."}
+              </p>
+            </div>
+          )}
+        </div>
 
-        <div className="space-y-4">
-          <h2 className="text-base font-medium">Todos os links</h2>
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
-          ) : links.length === 0 ? (
-            <Card className="p-6">
-              <p className="text-sm text-muted-foreground">Nenhum link ainda.</p>
-            </Card>
-          ) : (
-            links.map((l) => {
+        {/* Search + create */}
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por slug…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="bg-card pl-9"
+            />
+          </div>
+          <form onSubmit={handleCreate} className="flex gap-2">
+            <Input
+              placeholder="novo-slug"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              className="bg-card sm:w-56"
+              required
+            />
+            <Button type="submit" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Adicionar
+            </Button>
+          </form>
+        </div>
+
+        {/* Links list */}
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Carregando…</p>
+        ) : links.length === 0 ? (
+          <EmptyState onCreate={() => document.querySelector<HTMLInputElement>('input[placeholder="novo-slug"]')?.focus()} />
+        ) : filtered.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
+            Nenhum link encontrado para “{search}”.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((l) => {
               const mode = (l.mode as Mode) ?? "waiting";
               const meta = MODE_META[mode];
+              const isOpen = expanded[l.id] ?? false;
+              const s = stats[l.id];
               return (
-                <Card key={l.id} className="p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <Input
-                        value={l.slug}
-                        onChange={(e) =>
-                          updateLink(l.id, { slug: e.target.value })
-                        }
-                        onBlur={() => persistLink(l)}
-                        className="h-8 w-44 font-mono text-sm"
+                <div
+                  key={l.id}
+                  className={`overflow-hidden rounded-xl border bg-card transition-colors ${l.active ? "border-border" : "border-border/60 opacity-70"}`}
+                >
+                  {/* Collapsed header row */}
+                  <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+                    <button
+                      type="button"
+                      onClick={() => setExpanded((p) => ({ ...p, [l.id]: !isOpen }))}
+                      className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+                      title={isOpen ? "Recolher" : "Expandir"}
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
                       />
-                      <Badge
-                        variant="outline"
-                        className={`gap-1.5 ${meta.classes}`}
+                    </button>
+
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-mono text-sm">/{l.slug}</span>
+                      <span
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.activeCls}`}
                       >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${meta.dot}`}
-                        />
+                        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
                         {meta.label}
-                      </Badge>
+                      </span>
                     </div>
-                    <div className="flex gap-1">
+
+                    <ModePills l={l} onChange={(m) => setMode(l, m)} />
+
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-xs text-muted-foreground">
+                        {l.active ? "Ativo" : "Inativo"}
+                      </span>
+                      <Switch
+                        checked={l.active}
+                        onCheckedChange={(v) => setActive(l, v)}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1">
                       <Button
                         size="icon"
                         variant="ghost"
@@ -406,13 +505,17 @@ function AdminPage() {
                         <Copy className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="ghost" asChild title="Abrir">
-                        <a
-                          href={`/r/${l.slug}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
+                        <a href={`/r/${l.slug}`} target="_blank" rel="noreferrer">
                           <ExternalLink className="h-4 w-4" />
                         </a>
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDuplicate(l)}
+                        title="Duplicar"
+                      >
+                        <Files className="h-4 w-4" />
                       </Button>
                       <Button
                         size="icon"
@@ -427,83 +530,97 @@ function AdminPage() {
                         variant="ghost"
                         onClick={() => handleDelete(l.id)}
                         title="Remover"
+                        className="text-muted-foreground hover:text-[#ef4444]"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
 
-                  <div className="mt-4">
-                    <Label className="mb-2 block text-xs">Modo</Label>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {(["real", "decoy", "waiting"] as Mode[]).map((m) => {
-                        const active = mode === m;
-                        const mm = MODE_META[m];
-                        return (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => setMode(l, m)}
-                            className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
-                              active
-                                ? mm.classes + " font-medium"
-                                : "bg-background hover:bg-muted/50"
-                            }`}
-                          >
-                            <span className={`h-2 w-2 rounded-full ${mm.dot}`} />
-                            {mm.label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                  {/* Stats strip (always visible) */}
+                  <div className="grid grid-cols-3 gap-px border-t border-border bg-border">
+                    <StatCell label="Cliques real" value={s?.real ?? 0} mode="real" />
+                    <StatCell label="Cliques isca" value={s?.decoy ?? 0} mode="decoy" />
+                    <StatCell label="Cliques espera" value={s?.waiting ?? 0} mode="waiting" />
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Link real</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          type="url"
-                          placeholder="https://destino-real.com"
-                          value={l.real_url ?? ""}
-                          onChange={(e) =>
-                            updateLink(l.id, { real_url: e.target.value })
-                          }
-                          onBlur={() => persistLink(l)}
-                        />
+                  {/* Expanded body */}
+                  {isOpen && (
+                    <div className="border-t border-border px-5 py-5 animate-fade-in">
+                      <div className="grid gap-5 lg:grid-cols-[1fr_auto]">
+                        <div className="space-y-4">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <Field label="Slug">
+                              <Input
+                                value={l.slug}
+                                onChange={(e) =>
+                                  updateLink(l.id, { slug: e.target.value })
+                                }
+                                onBlur={() => persistLink(l)}
+                                className="bg-background font-mono"
+                              />
+                            </Field>
+                            <Field label="URL completa">
+                              <button
+                                type="button"
+                                onClick={() => copyLink(l.slug)}
+                                className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-3 text-sm hover:bg-secondary"
+                              >
+                                <span className="truncate text-muted-foreground">
+                                  {origin}/r/{l.slug}
+                                </span>
+                                <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              </button>
+                            </Field>
+                          </div>
+                          <Field label="Link real">
+                            <Input
+                              type="url"
+                              placeholder="https://destino-real.com"
+                              value={l.real_url ?? ""}
+                              onChange={(e) =>
+                                updateLink(l.id, { real_url: e.target.value })
+                              }
+                              onBlur={() => persistLink(l)}
+                              className="bg-background"
+                            />
+                          </Field>
+                          <Field label="Link isca">
+                            <Input
+                              type="url"
+                              placeholder="https://site-isca.com"
+                              value={l.decoy_url ?? ""}
+                              onChange={(e) =>
+                                updateLink(l.id, { decoy_url: e.target.value })
+                              }
+                              onBlur={() => persistLink(l)}
+                              className="bg-background"
+                            />
+                          </Field>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-2 lg:w-44">
+                          <div className="rounded-lg bg-white p-2.5">
+                            <QRCodeSVG
+                              value={`${origin}/r/${l.slug}`}
+                              size={140}
+                              level="M"
+                            />
+                          </div>
+                          <span className="text-[11px] text-muted-foreground">
+                            QR do redirect
+                          </span>
+                        </div>
                       </div>
+
+                      <LinkAnalytics agg={s} />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Link isca</Label>
-                      <Input
-                        type="url"
-                        placeholder="https://site-isca.com"
-                        value={l.decoy_url ?? ""}
-                        onChange={(e) =>
-                          updateLink(l.id, { decoy_url: e.target.value })
-                        }
-                        onBlur={() => persistLink(l)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <StatBox label="Cliques real" value={stats[l.id]?.real ?? 0} mode="real" />
-                    <StatBox label="Cliques isca" value={stats[l.id]?.decoy ?? 0} mode="decoy" />
-                    <StatBox label="Cliques espera" value={stats[l.id]?.waiting ?? 0} mode="waiting" />
-                  </div>
-
-                  <LinkAnalytics agg={stats[l.id]} />
-
-                  <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Save className="h-3 w-3" />
-                    As alterações são salvas ao clicar fora do campo.
-                  </p>
-                </Card>
+                  )}
+                </div>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </main>
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
@@ -557,7 +674,54 @@ function AdminPage() {
   );
 }
 
-function StatBox({
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function ModePills({
+  l,
+  onChange,
+}: {
+  l: LinkRow;
+  onChange: (m: Mode) => void;
+}) {
+  const current = (l.mode as Mode) ?? "waiting";
+  return (
+    <div className="inline-flex rounded-full border border-border bg-background p-0.5">
+      {(["real", "decoy", "waiting"] as Mode[]).map((m) => {
+        const active = current === m;
+        const meta = MODE_META[m];
+        return (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onChange(m)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+              active
+                ? meta.activeCls
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {meta.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatCell({
   label,
   value,
   mode,
@@ -568,13 +732,32 @@ function StatBox({
 }) {
   const meta = MODE_META[mode];
   return (
-    <div className={`rounded-md border px-3 py-2 ${meta.classes}`}>
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide opacity-80">
+    <div className="bg-card px-4 py-2.5">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
         <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
         {label}
       </div>
-      <div className="mt-0.5 text-lg font-semibold tabular-nums">{value}</div>
+      <div className={`mt-0.5 text-lg font-semibold tabular-nums ${meta.text}`}>
+        {value}
+      </div>
     </div>
   );
 }
 
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="rounded-xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <LinkIcon className="h-7 w-7" />
+      </div>
+      <h3 className="mt-5 text-base font-semibold">Nenhum link criado ainda</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Crie seu primeiro link para começar a redirecionar tráfego.
+      </p>
+      <Button onClick={onCreate} className="mt-5 gap-1.5">
+        <Plus className="h-4 w-4" />
+        Criar primeiro link
+      </Button>
+    </div>
+  );
+}
