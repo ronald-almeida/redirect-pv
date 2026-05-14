@@ -128,6 +128,26 @@ function AdminPage() {
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
+  // Realtime: live click updates
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const channel = supabase
+      .channel("admin-clicks-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "clicks" },
+        () => {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => loadStats(), 250);
+        },
+      )
+      .subscribe();
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase
