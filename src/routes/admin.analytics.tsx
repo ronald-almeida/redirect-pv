@@ -207,7 +207,7 @@ function AnalyticsPage() {
                 <Line
                   type="monotone"
                   dataKey="cliques"
-                  stroke="hsl(var(--primary))"
+                  stroke="var(--primary)"
                   strokeWidth={2}
                   dot={false}
                 />
