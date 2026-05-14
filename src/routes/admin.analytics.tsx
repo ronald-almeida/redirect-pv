@@ -136,12 +136,16 @@ function AnalyticsPage() {
       }
     }
 
-    const slugById = new Map(links.map((l) => [l.id, l.slug]));
-    const topLinks = topEntries(perLink, 5).map(([id, n]) => ({
-      id,
-      slug: slugById.get(id) ?? id.slice(0, 8),
-      count: n,
-    }));
+    const linkById = new Map(links.map((l) => [l.id, l]));
+    const topLinks = topEntries(perLink, 5).map(([id, n]) => {
+      const link = linkById.get(id);
+      return {
+        id,
+        slug: link?.slug ?? id.slice(0, 8),
+        name: link?.name ?? null,
+        count: n,
+      };
+    });
     const topCountries = topEntries(countries, 5);
     const totalDevices = devices.mobile + devices.desktop;
     const chartData = days.map((d) => ({
