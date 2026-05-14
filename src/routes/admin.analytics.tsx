@@ -86,7 +86,7 @@ function AnalyticsPage() {
         )
         .order("created_at", { ascending: false })
         .limit(1000),
-      supabase.from("links").select("id, slug"),
+      supabase.from("links").select("id, slug, name"),
     ]);
     if (clicksRes.error) console.error("clicks query error", clicksRes.error);
     if (linksRes.error) console.error("links query error", linksRes.error);
