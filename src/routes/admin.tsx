@@ -506,7 +506,16 @@ function AdminPage() {
 
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="truncate font-mono text-sm">/{l.slug}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-base font-semibold leading-tight">
+                          {l.name?.trim() || `/${l.slug}`}
+                        </div>
+                        {l.name?.trim() && (
+                          <div className="truncate font-mono text-xs text-muted-foreground">
+                            /{l.slug}
+                          </div>
+                        )}
+                      </div>
                       <span
                         className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.activeCls}`}
                       >
