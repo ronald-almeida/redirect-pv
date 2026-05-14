@@ -59,7 +59,7 @@ function AnalyticsPage() {
 
   const loadAll = async () => {
     setLoading(true);
-    const [{ data: c }, { data: l }] = await Promise.all([
+    const [clicksRes, linksRes] = await Promise.all([
       supabase
         .from("clicks")
         .select(
@@ -69,8 +69,10 @@ function AnalyticsPage() {
         .limit(1000),
       supabase.from("links").select("id, slug"),
     ]);
-    setClicks((c ?? []) as ClickRow[]);
-    setLinks((l ?? []) as LinkLite[]);
+    if (clicksRes.error) console.error("clicks query error", clicksRes.error);
+    if (linksRes.error) console.error("links query error", linksRes.error);
+    setClicks((clicksRes.data ?? []) as ClickRow[]);
+    setLinks((linksRes.data ?? []) as LinkLite[]);
     setLoading(false);
   };
 
