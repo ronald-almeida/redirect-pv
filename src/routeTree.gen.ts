@@ -14,6 +14,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RSlugRouteImport } from './routes/r.$slug'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
+import { Route as ApiPublicRSlugRouteImport } from './routes/api/public/r.$slug'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -40,6 +41,11 @@ const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AdminRoute,
 } as any)
+const ApiPublicRSlugRoute = ApiPublicRSlugRouteImport.update({
+  id: '/api/public/r/$slug',
+  path: '/api/public/r/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/r/$slug': typeof RSlugRoute
+  '/api/public/r/$slug': typeof ApiPublicRSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/r/$slug': typeof RSlugRoute
+  '/api/public/r/$slug': typeof ApiPublicRSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,33 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/r/$slug': typeof RSlugRoute
+  '/api/public/r/$slug': typeof ApiPublicRSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/login' | '/admin/analytics' | '/r/$slug'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/admin/analytics'
+    | '/r/$slug'
+    | '/api/public/r/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/login' | '/admin/analytics' | '/r/$slug'
-  id: '__root__' | '/' | '/admin' | '/login' | '/admin/analytics' | '/r/$slug'
+  to:
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/admin/analytics'
+    | '/r/$slug'
+    | '/api/public/r/$slug'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/admin/analytics'
+    | '/r/$slug'
+    | '/api/public/r/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +104,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
   RSlugRoute: typeof RSlugRoute
+  ApiPublicRSlugRoute: typeof ApiPublicRSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -115,6 +144,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/api/public/r/$slug': {
+      id: '/api/public/r/$slug'
+      path: '/api/public/r/$slug'
+      fullPath: '/api/public/r/$slug'
+      preLoaderRoute: typeof ApiPublicRSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -133,6 +169,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
   RSlugRoute: RSlugRoute,
+  ApiPublicRSlugRoute: ApiPublicRSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
