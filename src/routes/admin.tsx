@@ -31,6 +31,13 @@ import {
 import { LinkAnalytics } from "@/components/LinkAnalytics";
 import { type ClickRow, type LinkAgg, aggregate } from "@/lib/analytics";
 
+// Tell the edge cache to drop its copy for this slug so admin edits
+// (mode, real_url, owner_only, active, etc.) take effect immediately
+// instead of waiting for the 30s TTL.
+const purgeEdgeCache = (slug: string) => {
+  fetch(`/r/${encodeURIComponent(slug)}`, { method: "DELETE" }).catch(() => {});
+};
+
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
