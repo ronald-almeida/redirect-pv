@@ -20,10 +20,86 @@ async function waitUntilSafe(p: Promise<unknown>): Promise<void> {
   if (waitUntilImpl) waitUntilImpl(p);
 }
 
+// Cloudflare Cache API helpers. `caches.default` exists only in the Workers
+// runtime; in local dev SSR we silently no-op.
+const CACHE_TTL_SECONDS = 30;
+const cacheKeyForSlug = (slug: string) =>
+  new Request(`https://cache.internal/link/${encodeURIComponent(slug)}`);
+const SETTINGS_CACHE_KEY = new Request(
+  "https://cache.internal/settings/default_waiting",
+);
+
+function getEdgeCache(): Cache | null {
+  try {
+    // @ts-ignore - `caches` is a Workers global
+    return typeof caches !== "undefined" && caches?.default ? caches.default : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readCachedJSON<T>(key: Request): Promise<T | null> {
+  const cache = getEdgeCache();
+  if (!cache) return null;
+  try {
+    const hit = await cache.match(key);
+    if (!hit) return null;
+    return (await hit.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedJSON(key: Request, value: unknown, ttl = CACHE_TTL_SECONDS) {
+  const cache = getEdgeCache();
+  if (!cache) return;
+  try {
+    await cache.put(
+      key,
+      new Response(JSON.stringify(value), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": `public, max-age=${ttl}`,
+        },
+      }),
+    );
+  } catch {
+    /* ignore cache failures */
+  }
+}
+
+export async function purgeSlugCache(slug: string): Promise<boolean> {
+  const cache = getEdgeCache();
+  if (!cache) return false;
+  try {
+    return await cache.delete(cacheKeyForSlug(slug));
+  } catch {
+    return false;
+  }
+}
+
 const BOT_REGEX =
   /bot|crawler|spider|crawling|facebookexternalhit|slurp|bingpreview|whatsapp|telegram|discord|slack|linkedin|embedly|preview|fetch|monitor|curl|wget|python-requests|httpclient|axios|headless/i;
 
 const FALLBACK = "https://google.com";
+
+type CachedLink = {
+  id: string;
+  mode: string;
+  real_url: string | null;
+  decoy_url: string | null;
+  active: boolean;
+  expires_at: string | null;
+  click_limit: number | null;
+  click_count: number;
+  allowed_countries: string[] | null;
+  blocked_ips: string[] | null;
+  real_urls: string[] | null;
+  ab_test: boolean;
+  rotation_index: number;
+  owner_only: boolean;
+  owner_ips: string[];
+} | null;
 
 function pickDestination(
   link: any,
@@ -75,30 +151,52 @@ export async function handleRedirect(
   slug: string,
 ): Promise<Response> {
   const url = new URL(request.url);
+  const linkCacheKey = cacheKeyForSlug(slug);
 
-  const { data: link } = await supabaseAdmin
-    .from("links")
-    .select(
-      "id, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index, owner_only, owner_ips",
-    )
-    .eq("slug", slug)
-    .maybeSingle();
+  // 1. Try the edge cache first.
+  let link = await readCachedJSON<CachedLink>(linkCacheKey);
+  let cacheHit = link !== null;
+
+  // 2. Fall back to Supabase on miss.
+  if (!cacheHit) {
+    const { data } = await supabaseAdmin
+      .from("links")
+      .select(
+        "id, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index, owner_only, owner_ips",
+      )
+      .eq("slug", slug)
+      .maybeSingle();
+    link = (data as CachedLink) ?? null;
+    // Cache both hits and misses (short TTL) to absorb bursts of bad traffic.
+    void waitUntilSafe(writeCachedJSON(linkCacheKey, link));
+  }
 
   if (!link) {
     return Response.redirect(FALLBACK, 302);
   }
 
+  // 3. Default waiting URL — also cached.
   let defaultWaiting: string | null = null;
   if (
     link.mode === "waiting" ||
     (link.click_limit !== null && link.click_count >= link.click_limit)
   ) {
-    const { data: settings } = await supabaseAdmin
-      .from("settings")
-      .select("default_waiting_url")
-      .limit(1)
-      .maybeSingle();
-    defaultWaiting = settings?.default_waiting_url ?? null;
+    const cachedSettings = await readCachedJSON<{ url: string | null }>(
+      SETTINGS_CACHE_KEY,
+    );
+    if (cachedSettings) {
+      defaultWaiting = cachedSettings.url;
+    } else {
+      const { data: settings } = await supabaseAdmin
+        .from("settings")
+        .select("default_waiting_url")
+        .limit(1)
+        .maybeSingle();
+      defaultWaiting = settings?.default_waiting_url ?? null;
+      void waitUntilSafe(
+        writeCachedJSON(SETTINGS_CACHE_KEY, { url: defaultWaiting }),
+      );
+    }
   }
 
   const ua = request.headers.get("user-agent") || "";
@@ -154,6 +252,7 @@ export async function handleRedirect(
     headers: {
       Location: destination,
       "Cache-Control": "no-store",
+      "X-Cache": cacheHit ? "HIT" : "MISS",
     },
   });
 }
