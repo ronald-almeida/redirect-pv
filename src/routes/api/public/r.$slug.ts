@@ -16,6 +16,8 @@ function pickDestination(link: any, defaultWaiting: string | null, isBot: boolea
     return { url: decoy, mode: `decoy:expired` };
   if (Array.isArray(link.blocked_ips) && ip && link.blocked_ips.includes(ip))
     return { url: decoy, mode: `decoy:blocked_ip` };
+  if (link.owner_only && (!ip || !Array.isArray(link.owner_ips) || !link.owner_ips.includes(ip)))
+    return { url: decoy, mode: `decoy:owner_only` };
   if (link.click_limit !== null && link.click_count >= link.click_limit)
     return { url: waiting, mode: `waiting:limit` };
 
