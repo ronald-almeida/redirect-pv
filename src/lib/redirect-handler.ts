@@ -151,6 +151,7 @@ export async function handleRedirect(
   slug: string,
 ): Promise<Response> {
   const startTime = Date.now();
+  console.log(`[redirect] hit slug=${slug}`);
   const url = new URL(request.url);
   const linkCacheKey = cacheKeyForSlug(slug);
 
