@@ -274,10 +274,11 @@ function AdminPage() {
   };
 
   const persistLink = async (l: LinkRow) => {
+    const newSlug = l.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
     const { error } = await supabase
       .from("links")
       .update({
-        slug: l.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, ""),
+        slug: newSlug,
         name: l.name?.trim() || null,
         real_url: l.real_url?.trim() || null,
         decoy_url: l.decoy_url?.trim() || null,
@@ -290,6 +291,8 @@ function AdminPage() {
       load();
       return;
     }
+    purgeEdgeCache(newSlug);
+    if (newSlug !== l.slug) purgeEdgeCache(l.slug);
   };
 
   const setMode = async (l: LinkRow, mode: Mode) => {
@@ -301,7 +304,9 @@ function AdminPage() {
     if (error) {
       alert(error.message);
       load();
+      return;
     }
+    purgeEdgeCache(l.slug);
   };
 
   const setActive = async (l: LinkRow, active: boolean) => {
@@ -313,7 +318,9 @@ function AdminPage() {
     if (error) {
       alert(error.message);
       load();
+      return;
     }
+    purgeEdgeCache(l.slug);
   };
 
   const openEdit = (l: LinkRow) => {
