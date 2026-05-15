@@ -1,5 +1,25 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+// Cloudflare Workers provides a top-level `waitUntil` from the
+// `cloudflare:workers` virtual module that hooks into the current
+// request's execution context. We resolve it lazily so non-Workers
+// runtimes (local dev SSR) fall back to a no-op without crashing.
+let waitUntilImpl: ((p: Promise<unknown>) => void) | null = null;
+let waitUntilResolved = false;
+async function waitUntilSafe(p: Promise<unknown>): Promise<void> {
+  if (!waitUntilResolved) {
+    waitUntilResolved = true;
+    try {
+      // @ts-expect-error - virtual module provided by the Workers runtime
+      const mod: any = await import(/* @vite-ignore */ "cloudflare:workers");
+      waitUntilImpl = mod.waitUntil ?? null;
+    } catch {
+      waitUntilImpl = null;
+    }
+  }
+  if (waitUntilImpl) waitUntilImpl(p);
+}
+
 const BOT_REGEX =
   /bot|crawler|spider|crawling|facebookexternalhit|slurp|bingpreview|whatsapp|telegram|discord|slack|linkedin|embedly|preview|fetch|monitor|curl|wget|python-requests|httpclient|axios|headless/i;
 
@@ -99,12 +119,10 @@ export async function handleRedirect(
     ip,
   );
 
-  console.log("[redirect] tracking click", {
-    link_id: link.id,
-    slug,
-    mode_at_click: modeAtClick,
-  });
-  const tracking = await Promise.allSettled([
+  // Fire-and-forget tracking. On Workers we hand the promise to
+  // `waitUntil` so the runtime keeps the worker alive until the writes
+  // finish, but the 302 below ships immediately.
+  const trackingPromise = Promise.allSettled([
     supabaseAdmin.rpc("increment_link_click", { _link_id: link.id }),
     supabaseAdmin.from("clicks").insert({
       link_id: link.id,
@@ -117,18 +135,19 @@ export async function handleRedirect(
       utm_medium: url.searchParams.get("utm_medium"),
       utm_campaign: url.searchParams.get("utm_campaign"),
     }),
-  ]);
-  for (const [i, r] of tracking.entries()) {
-    if (r.status === "rejected") {
-      console.error(`[redirect] tracking step ${i} failed`, r.reason);
-    } else if ((r.value as any)?.error) {
-      console.error(
-        `[redirect] tracking step ${i} error`,
-        (r.value as any).error,
-      );
+  ]).then((results) => {
+    for (const [i, r] of results.entries()) {
+      if (r.status === "rejected") {
+        console.error(`[redirect] tracking step ${i} failed`, r.reason);
+      } else if ((r.value as any)?.error) {
+        console.error(
+          `[redirect] tracking step ${i} error`,
+          (r.value as any).error,
+        );
+      }
     }
-  }
-  console.log("[redirect] tracking done");
+  });
+  void waitUntilSafe(trackingPromise);
 
   return new Response(null, {
     status: 302,
