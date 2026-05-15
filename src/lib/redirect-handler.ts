@@ -10,6 +10,7 @@ async function waitUntilSafe(p: Promise<unknown>): Promise<void> {
   if (!waitUntilResolved) {
     waitUntilResolved = true;
     try {
+      // @ts-expect-error - virtual module provided by the Workers runtime
       const mod: any = await import(/* @vite-ignore */ "cloudflare:workers");
       waitUntilImpl = mod.waitUntil ?? null;
     } catch {
