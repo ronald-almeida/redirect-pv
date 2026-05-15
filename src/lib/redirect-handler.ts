@@ -151,6 +151,7 @@ export async function handleRedirect(
   slug: string,
 ): Promise<Response> {
   const startTime = Date.now();
+  console.log(`[redirect] hit slug=${slug}`);
   const url = new URL(request.url);
   const linkCacheKey = cacheKeyForSlug(slug);
 
@@ -223,9 +224,12 @@ export async function handleRedirect(
   // is built so it reflects the actual redirect latency.
   const redirectMs = Date.now() - startTime;
 
-  // Fire-and-forget tracking. On Workers we hand the promise to
-  // `waitUntil` so the runtime keeps the worker alive until the writes
-  // finish, but the 302 below ships immediately.
+  // Fire-and-forget tracking. Each write is independent (Promise.allSettled),
+  // so a failure in one step (e.g. metrics RPC) cannot roll back the others.
+  // Logged explicitly so failures are visible in worker logs.
+  console.log(
+    `[redirect] tracking start link_id=${link.id} slug=${slug} mode=${modeAtClick} ms=${redirectMs}`,
+  );
   const trackingPromise = Promise.allSettled([
     supabaseAdmin.rpc("increment_link_click", { _link_id: link.id }),
     supabaseAdmin.rpc("record_redirect_metrics", {
@@ -245,14 +249,17 @@ export async function handleRedirect(
       utm_campaign: url.searchParams.get("utm_campaign"),
     }),
   ]).then((results) => {
+    const labels = ["increment_link_click", "record_redirect_metrics", "clicks.insert"];
     for (const [i, r] of results.entries()) {
       if (r.status === "rejected") {
-        console.error(`[redirect] tracking step ${i} failed`, r.reason);
+        console.error(`[redirect] tracking ${labels[i]} REJECTED`, r.reason);
       } else if ((r.value as any)?.error) {
         console.error(
-          `[redirect] tracking step ${i} error`,
-          (r.value as any).error,
+          `[redirect] tracking ${labels[i]} ERROR`,
+          JSON.stringify((r.value as any).error),
         );
+      } else {
+        console.log(`[redirect] tracking ${labels[i]} OK`);
       }
     }
   });
