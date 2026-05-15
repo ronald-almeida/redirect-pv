@@ -248,39 +248,60 @@ export async function handleRedirect(
   console.log(
     `[redirect] tracking start link_id=${link.id} slug=${slug} mode=${modeAtClick} ms=${redirectMs}`,
   );
-  const trackingPromise = Promise.allSettled([
-    supabaseAdmin.rpc("increment_link_click", { _link_id: link.id }),
-    supabaseAdmin.rpc("record_redirect_metrics", {
-      _link_id: link.id,
-      _ms: redirectMs,
-    }),
-    supabaseAdmin.from("clicks").insert({
-      link_id: link.id,
-      mode_at_click: modeAtClick,
-      ip: ip || null,
-      country,
-      device,
-      is_vpn: false,
-      redirect_ms: redirectMs,
-      utm_source: url.searchParams.get("utm_source"),
-      utm_medium: url.searchParams.get("utm_medium"),
-      utm_campaign: url.searchParams.get("utm_campaign"),
-    }),
-  ]).then((results) => {
-    const labels = ["increment_link_click", "record_redirect_metrics", "clicks.insert"];
-    for (const [i, r] of results.entries()) {
-      if (r.status === "rejected") {
-        console.error(`[redirect] tracking ${labels[i]} REJECTED`, r.reason);
-      } else if ((r.value as any)?.error) {
-        console.error(
-          `[redirect] tracking ${labels[i]} ERROR`,
-          JSON.stringify((r.value as any).error),
-        );
+
+  const trackStep = async <T,>(label: string, p: PromiseLike<T>): Promise<T | null> => {
+    try {
+      const res: any = await p;
+      if (res?.error) {
+        console.error(`[redirect] ${label} ERROR`, JSON.stringify(res.error));
       } else {
-        console.log(`[redirect] tracking ${labels[i]} OK`);
+        console.log(`[redirect] ${label} OK`);
       }
+      return res;
+    } catch (e: any) {
+      console.error(
+        `[redirect] ${label} FAILED`,
+        JSON.stringify({ message: e?.message, name: e?.name, stack: e?.stack, raw: e }),
+      );
+      return null;
     }
-  });
+  };
+
+  const trackingPromise = (async () => {
+    const results = await Promise.allSettled([
+      trackStep(
+        "increment_link_click",
+        supabaseAdmin.rpc("increment_link_click", { _link_id: link!.id }),
+      ),
+      trackStep(
+        "record_redirect_metrics",
+        supabaseAdmin.rpc("record_redirect_metrics", {
+          _link_id: link!.id,
+          _ms: redirectMs,
+        }),
+      ),
+      trackStep(
+        "clicks.insert",
+        supabaseAdmin.from("clicks").insert({
+          link_id: link!.id,
+          mode_at_click: modeAtClick,
+          ip: ip || null,
+          country,
+          device,
+          is_vpn: false,
+          redirect_ms: redirectMs,
+          utm_source: url.searchParams.get("utm_source"),
+          utm_medium: url.searchParams.get("utm_medium"),
+          utm_campaign: url.searchParams.get("utm_campaign"),
+        }),
+      ),
+    ]);
+    console.log(
+      `[redirect] tracking done`,
+      results.map((r) => r.status).join(","),
+    );
+  })();
+
   void waitUntilSafe(trackingPromise);
 
   return new Response(null, {
