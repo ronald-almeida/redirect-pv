@@ -24,6 +24,7 @@ export type Database = {
           is_vpn: boolean
           link_id: string
           mode_at_click: string
+          redirect_ms: number | null
           utm_campaign: string | null
           utm_medium: string | null
           utm_source: string | null
@@ -37,6 +38,7 @@ export type Database = {
           is_vpn?: boolean
           link_id: string
           mode_at_click: string
+          redirect_ms?: number | null
           utm_campaign?: string | null
           utm_medium?: string | null
           utm_source?: string | null
@@ -50,6 +52,7 @@ export type Database = {
           is_vpn?: boolean
           link_id?: string
           mode_at_click?: string
+          redirect_ms?: number | null
           utm_campaign?: string | null
           utm_medium?: string | null
           utm_source?: string | null
@@ -70,6 +73,7 @@ export type Database = {
           access_password: string | null
           active: boolean
           allowed_countries: string[] | null
+          avg_redirect_ms: number
           blocked_ips: string[] | null
           click_count: number
           click_limit: number | null
@@ -77,6 +81,7 @@ export type Database = {
           decoy_url: string | null
           expires_at: string | null
           id: string
+          last_redirect_ms: number
           mode: string
           name: string | null
           owner_ips: string[]
@@ -88,12 +93,14 @@ export type Database = {
           real_urls: string[] | null
           rotation_index: number
           slug: string
+          total_redirects: number
         }
         Insert: {
           ab_test?: boolean
           access_password?: string | null
           active?: boolean
           allowed_countries?: string[] | null
+          avg_redirect_ms?: number
           blocked_ips?: string[] | null
           click_count?: number
           click_limit?: number | null
@@ -101,6 +108,7 @@ export type Database = {
           decoy_url?: string | null
           expires_at?: string | null
           id?: string
+          last_redirect_ms?: number
           mode?: string
           name?: string | null
           owner_ips?: string[]
@@ -112,12 +120,14 @@ export type Database = {
           real_urls?: string[] | null
           rotation_index?: number
           slug: string
+          total_redirects?: number
         }
         Update: {
           ab_test?: boolean
           access_password?: string | null
           active?: boolean
           allowed_countries?: string[] | null
+          avg_redirect_ms?: number
           blocked_ips?: string[] | null
           click_count?: number
           click_limit?: number | null
@@ -125,6 +135,7 @@ export type Database = {
           decoy_url?: string | null
           expires_at?: string | null
           id?: string
+          last_redirect_ms?: number
           mode?: string
           name?: string | null
           owner_ips?: string[]
@@ -136,6 +147,7 @@ export type Database = {
           real_urls?: string[] | null
           rotation_index?: number
           slug?: string
+          total_redirects?: number
         }
         Relationships: []
       }
@@ -163,6 +175,10 @@ export type Database = {
     }
     Functions: {
       increment_link_click: { Args: { _link_id: string }; Returns: undefined }
+      record_redirect_metrics: {
+        Args: { _link_id: string; _ms: number }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
