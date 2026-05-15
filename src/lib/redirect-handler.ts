@@ -1,14 +1,22 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-// Cloudflare Workers provides a top-level `waitUntil` that hooks into the
-// current request's execution context. Import is wrapped in a try so local
-// dev (Node SSR) doesn't crash — falls back to a no-op there.
-let waitUntil: (p: Promise<unknown>) => void = () => {};
-try {
-  // @ts-expect-error - virtual module only available on Workers runtime
-  ({ waitUntil } = await import("cloudflare:workers"));
-} catch {
-  /* non-Workers runtime: tracking will run inline as a fire-and-forget */
+// Cloudflare Workers provides a top-level `waitUntil` from the
+// `cloudflare:workers` virtual module that hooks into the current
+// request's execution context. We resolve it lazily so non-Workers
+// runtimes (local dev SSR) fall back to a no-op without crashing.
+let waitUntilImpl: ((p: Promise<unknown>) => void) | null = null;
+let waitUntilResolved = false;
+async function waitUntilSafe(p: Promise<unknown>): Promise<void> {
+  if (!waitUntilResolved) {
+    waitUntilResolved = true;
+    try {
+      const mod: any = await import(/* @vite-ignore */ "cloudflare:workers");
+      waitUntilImpl = mod.waitUntil ?? null;
+    } catch {
+      waitUntilImpl = null;
+    }
+  }
+  if (waitUntilImpl) waitUntilImpl(p);
 }
 
 const BOT_REGEX =
