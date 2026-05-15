@@ -53,6 +53,8 @@ interface LinkRow {
   page_message: string | null;
   page_icon: string | null;
   active: boolean;
+  owner_only: boolean;
+  owner_ips: string[];
   created_at: string;
 }
 
