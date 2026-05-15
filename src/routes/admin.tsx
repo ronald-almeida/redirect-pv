@@ -749,7 +749,9 @@ function AdminPage() {
                                       if (error) {
                                         alert(error.message);
                                         load();
+                                        return;
                                       }
+                                      purgeEdgeCache(l.slug);
                                     } catch {
                                       alert("Não foi possível detectar seu IP.");
                                     }
