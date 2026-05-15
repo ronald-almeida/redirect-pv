@@ -79,6 +79,8 @@ export type Database = {
           id: string
           mode: string
           name: string | null
+          owner_ips: string[]
+          owner_only: boolean
           page_icon: string | null
           page_message: string | null
           page_title: string | null
@@ -101,6 +103,8 @@ export type Database = {
           id?: string
           mode?: string
           name?: string | null
+          owner_ips?: string[]
+          owner_only?: boolean
           page_icon?: string | null
           page_message?: string | null
           page_title?: string | null
@@ -123,6 +127,8 @@ export type Database = {
           id?: string
           mode?: string
           name?: string | null
+          owner_ips?: string[]
+          owner_only?: boolean
           page_icon?: string | null
           page_message?: string | null
           page_title?: string | null
