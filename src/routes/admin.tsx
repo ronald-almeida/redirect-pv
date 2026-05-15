@@ -162,6 +162,26 @@ function AdminPage() {
     };
   }, []);
 
+  // Realtime: live link updates (speed monitor, click_count, etc.)
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin-links-realtime")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "links" },
+        (payload) => {
+          const next = payload.new as Partial<LinkRow> & { id: string };
+          setLinks((prev) =>
+            prev.map((l) => (l.id === next.id ? { ...l, ...next } : l)),
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase
