@@ -54,7 +54,7 @@ export const Route = createFileRoute("/api/public/r/$slug")({
         const { data: link } = await supabaseAdmin
           .from("links")
           .select(
-            "id, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index",
+            "id, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index, owner_only, owner_ips",
           )
           .eq("slug", slug)
           .maybeSingle();
