@@ -957,25 +957,61 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-// Color-coded redirect speed indicator. Thresholds:
+// Redirect speed monitor row. Color-codes the "Último" value:
 //   green  < 500ms
 //   yellow 500-1500ms
 //   red    > 1500ms
-function SpeedBadge({ last, avg }: { last: number; avg: number }) {
-  if (!last && !avg) return null;
-  const ref = last || avg;
-  const cls =
-    ref < 500
-      ? "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400"
-      : ref < 1500
-        ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-        : "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400";
+function speedColor(ms: number): string {
+  if (!ms) return "#9ca3af";
+  if (ms < 500) return "#22c55e";
+  if (ms <= 1500) return "#eab308";
+  return "#ef4444";
+}
+
+function SpeedMonitor({
+  last,
+  avg,
+  total,
+}: {
+  last: number;
+  avg: number;
+  total: number;
+}) {
+  const hasData = last > 0;
   return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums ${cls}`}
-      title={`Último redirect: ${last}ms · Média: ${avg}ms`}
-    >
-      ⚡ {last}ms <span className="opacity-60">· avg {avg}ms</span>
-    </span>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-border bg-card/50 px-5 py-2.5 text-xs">
+      <span className="font-semibold" style={{ color: speedColor(last) }}>
+        ⚡ Velocidade de Redirect
+      </span>
+      <span className="text-muted-foreground">
+        Último:{" "}
+        {hasData ? (
+          <span
+            className="font-semibold tabular-nums"
+            style={{ color: speedColor(last) }}
+          >
+            {last}ms
+          </span>
+        ) : (
+          <span className="italic">Sem dados ainda</span>
+        )}
+      </span>
+      <span className="text-muted-foreground">
+        Média:{" "}
+        <span
+          className="font-semibold tabular-nums"
+          style={{ color: speedColor(avg) }}
+        >
+          {avg}ms
+        </span>
+      </span>
+      <span className="text-muted-foreground">
+        Total:{" "}
+        <span className="font-semibold tabular-nums text-foreground">
+          {total}
+        </span>{" "}
+        redirects
+      </span>
+    </div>
   );
 }
