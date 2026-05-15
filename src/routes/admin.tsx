@@ -704,7 +704,9 @@ function AdminPage() {
                                   if (error) {
                                     alert(error.message);
                                     load();
+                                    return;
                                   }
+                                  purgeEdgeCache(l.slug);
                                 }}
                               />
                             </div>
