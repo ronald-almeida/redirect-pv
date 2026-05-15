@@ -1,18 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { handleRedirect, purgeSlugCache } from "@/lib/redirect-handler";
 
 export const Route = createFileRoute("/r/$slug")({
   server: {
     handlers: {
-      GET: async ({ request, params }) => handleRedirect(request, params.slug),
-      // Cache purge — called by the admin panel after a link is updated so
-      // changes propagate within seconds instead of waiting for the 30s TTL.
-      DELETE: async ({ params }) => {
-        const purged = await purgeSlugCache(params.slug);
-        return Response.json(
-          { ok: true, purged, slug: params.slug },
-          { headers: { "Cache-Control": "no-store" } },
+      GET: async ({ request, params }) => {
+        const url = new URL(request.url);
+        const destination = new URL(
+          `/r/${encodeURIComponent(params.slug)}`,
+          "https://birgredi.shop",
         );
+        // Preserve all original query parameters
+        url.searchParams.forEach((value, key) => {
+          destination.searchParams.set(key, value);
+        });
+        return Response.redirect(destination.toString(), 301);
       },
     },
   },
