@@ -932,3 +932,26 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
     </div>
   );
 }
+
+// Color-coded redirect speed indicator. Thresholds:
+//   green  < 500ms
+//   yellow 500-1500ms
+//   red    > 1500ms
+function SpeedBadge({ last, avg }: { last: number; avg: number }) {
+  if (!last && !avg) return null;
+  const ref = last || avg;
+  const cls =
+    ref < 500
+      ? "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400"
+      : ref < 1500
+        ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+        : "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums ${cls}`}
+      title={`Último redirect: ${last}ms · Média: ${avg}ms`}
+    >
+      ⚡ {last}ms <span className="opacity-60">· avg {avg}ms</span>
+    </span>
+  );
+}
