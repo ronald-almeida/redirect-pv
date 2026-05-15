@@ -64,6 +64,8 @@ interface LinkRow {
   owner_only: boolean;
   owner_ips: string[];
   created_at: string;
+  avg_redirect_ms?: number | null;
+  last_redirect_ms?: number | null;
 }
 
 const DEFAULTS = {
