@@ -53,6 +53,8 @@ interface LinkRow {
   page_message: string | null;
   page_icon: string | null;
   active: boolean;
+  owner_only: boolean;
+  owner_ips: string[];
   created_at: string;
 }
 
@@ -271,6 +273,8 @@ function AdminPage() {
         name: l.name?.trim() || null,
         real_url: l.real_url?.trim() || null,
         decoy_url: l.decoy_url?.trim() || null,
+        owner_only: l.owner_only,
+        owner_ips: l.owner_ips ?? [],
       })
       .eq("id", l.id);
     if (error) {
@@ -649,6 +653,80 @@ function AdminPage() {
                               className="bg-background"
                             />
                           </Field>
+
+                          <div className="rounded-md border border-border bg-background/40 p-3 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium">Somente eu</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Apenas IPs autorizados acessam o link real. Outros vão para a isca.
+                                </div>
+                              </div>
+                              <Switch
+                                checked={!!l.owner_only}
+                                onCheckedChange={async (v) => {
+                                  updateLink(l.id, { owner_only: v });
+                                  const { error } = await supabase
+                                    .from("links")
+                                    .update({ owner_only: v })
+                                    .eq("id", l.id);
+                                  if (error) {
+                                    alert(error.message);
+                                    load();
+                                  }
+                                }}
+                              />
+                            </div>
+
+                            {l.owner_only && (
+                              <div className="space-y-2">
+                                <Label className="text-xs">Meus IPs autorizados</Label>
+                                <Input
+                                  placeholder="Ex: 187.45.10.2, 2804:abc::1"
+                                  value={(l.owner_ips ?? []).join(", ")}
+                                  onChange={(e) =>
+                                    updateLink(l.id, {
+                                      owner_ips: e.target.value
+                                        .split(",")
+                                        .map((s) => s.trim())
+                                        .filter(Boolean),
+                                    })
+                                  }
+                                  onBlur={() => persistLink(l)}
+                                  className="bg-background font-mono text-xs"
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={async () => {
+                                    try {
+                                      const r = await fetch("https://api.ipify.org?format=json");
+                                      const j = await r.json();
+                                      const ip = String(j.ip || "").trim();
+                                      if (!ip) return;
+                                      const current = l.owner_ips ?? [];
+                                      if (current.includes(ip)) return;
+                                      const next = [...current, ip];
+                                      updateLink(l.id, { owner_ips: next });
+                                      const { error } = await supabase
+                                        .from("links")
+                                        .update({ owner_ips: next })
+                                        .eq("id", l.id);
+                                      if (error) {
+                                        alert(error.message);
+                                        load();
+                                      }
+                                    } catch {
+                                      alert("Não foi possível detectar seu IP.");
+                                    }
+                                  }}
+                                >
+                                  Adicionar meu IP atual
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex flex-col items-center gap-2 lg:w-44">
