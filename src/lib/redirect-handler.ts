@@ -150,6 +150,7 @@ export async function handleRedirect(
   request: Request,
   slug: string,
 ): Promise<Response> {
+  const startTime = Date.now();
   const url = new URL(request.url);
   const linkCacheKey = cacheKeyForSlug(slug);
 
