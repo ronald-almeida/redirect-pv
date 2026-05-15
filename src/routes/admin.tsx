@@ -643,6 +643,13 @@ function AdminPage() {
                     <StatCell label="Cliques espera" value={s?.waiting ?? 0} mode="waiting" />
                   </div>
 
+                  {/* Redirect speed monitor */}
+                  <SpeedMonitor
+                    last={l.last_redirect_ms ?? 0}
+                    avg={l.avg_redirect_ms ?? 0}
+                    total={l.total_redirects ?? 0}
+                  />
+
                   {/* Expanded body */}
                   {isOpen && (
                     <div className="border-t border-border px-5 py-5 animate-fade-in">
