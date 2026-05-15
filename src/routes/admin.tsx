@@ -273,6 +273,8 @@ function AdminPage() {
         name: l.name?.trim() || null,
         real_url: l.real_url?.trim() || null,
         decoy_url: l.decoy_url?.trim() || null,
+        owner_only: l.owner_only,
+        owner_ips: l.owner_ips ?? [],
       })
       .eq("id", l.id);
     if (error) {
