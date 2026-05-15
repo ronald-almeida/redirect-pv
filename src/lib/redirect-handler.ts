@@ -2,22 +2,40 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // Cloudflare Workers provides a top-level `waitUntil` from the
 // `cloudflare:workers` virtual module that hooks into the current
-// request's execution context. We resolve it lazily so non-Workers
-// runtimes (local dev SSR) fall back to a no-op without crashing.
+// request's execution context. We resolve it EAGERLY at module load
+// so the first request doesn't lose its tracking promise to the async
+// dynamic import resolving after the response is sent.
 let waitUntilImpl: ((p: Promise<unknown>) => void) | null = null;
-let waitUntilResolved = false;
+const waitUntilReady: Promise<void> = (async () => {
+  try {
+    // @ts-expect-error - virtual module provided by the Workers runtime
+    const mod: any = await import(/* @vite-ignore */ "cloudflare:workers");
+    waitUntilImpl = mod.waitUntil ?? null;
+    console.log(`[redirect] waitUntil ${waitUntilImpl ? "ready" : "unavailable"}`);
+  } catch {
+    waitUntilImpl = null;
+    console.log("[redirect] waitUntil unavailable (non-Workers runtime)");
+  }
+})();
+
 async function waitUntilSafe(p: Promise<unknown>): Promise<void> {
-  if (!waitUntilResolved) {
-    waitUntilResolved = true;
+  // Make sure the Workers runtime resolution finished before we decide
+  // whether to register the promise or await it inline.
+  await waitUntilReady;
+  if (waitUntilImpl) {
     try {
-      // @ts-expect-error - virtual module provided by the Workers runtime
-      const mod: any = await import(/* @vite-ignore */ "cloudflare:workers");
-      waitUntilImpl = mod.waitUntil ?? null;
-    } catch {
-      waitUntilImpl = null;
+      waitUntilImpl(p);
+      return;
+    } catch (e) {
+      console.error("[redirect] waitUntil registration failed", e);
     }
   }
-  if (waitUntilImpl) waitUntilImpl(p);
+  // Fallback: await inline so the promise actually completes (e.g. local SSR).
+  try {
+    await p;
+  } catch (e) {
+    console.error("[redirect] inline tracking failed", e);
+  }
 }
 
 // Cloudflare Cache API helpers. `caches.default` exists only in the Workers
@@ -230,39 +248,60 @@ export async function handleRedirect(
   console.log(
     `[redirect] tracking start link_id=${link.id} slug=${slug} mode=${modeAtClick} ms=${redirectMs}`,
   );
-  const trackingPromise = Promise.allSettled([
-    supabaseAdmin.rpc("increment_link_click", { _link_id: link.id }),
-    supabaseAdmin.rpc("record_redirect_metrics", {
-      _link_id: link.id,
-      _ms: redirectMs,
-    }),
-    supabaseAdmin.from("clicks").insert({
-      link_id: link.id,
-      mode_at_click: modeAtClick,
-      ip: ip || null,
-      country,
-      device,
-      is_vpn: false,
-      redirect_ms: redirectMs,
-      utm_source: url.searchParams.get("utm_source"),
-      utm_medium: url.searchParams.get("utm_medium"),
-      utm_campaign: url.searchParams.get("utm_campaign"),
-    }),
-  ]).then((results) => {
-    const labels = ["increment_link_click", "record_redirect_metrics", "clicks.insert"];
-    for (const [i, r] of results.entries()) {
-      if (r.status === "rejected") {
-        console.error(`[redirect] tracking ${labels[i]} REJECTED`, r.reason);
-      } else if ((r.value as any)?.error) {
-        console.error(
-          `[redirect] tracking ${labels[i]} ERROR`,
-          JSON.stringify((r.value as any).error),
-        );
+
+  const trackStep = async <T,>(label: string, p: PromiseLike<T>): Promise<T | null> => {
+    try {
+      const res: any = await p;
+      if (res?.error) {
+        console.error(`[redirect] ${label} ERROR`, JSON.stringify(res.error));
       } else {
-        console.log(`[redirect] tracking ${labels[i]} OK`);
+        console.log(`[redirect] ${label} OK`);
       }
+      return res;
+    } catch (e: any) {
+      console.error(
+        `[redirect] ${label} FAILED`,
+        JSON.stringify({ message: e?.message, name: e?.name, stack: e?.stack, raw: e }),
+      );
+      return null;
     }
-  });
+  };
+
+  const trackingPromise = (async () => {
+    const results = await Promise.allSettled([
+      trackStep(
+        "increment_link_click",
+        supabaseAdmin.rpc("increment_link_click", { _link_id: link!.id }),
+      ),
+      trackStep(
+        "record_redirect_metrics",
+        supabaseAdmin.rpc("record_redirect_metrics", {
+          _link_id: link!.id,
+          _ms: redirectMs,
+        }),
+      ),
+      trackStep(
+        "clicks.insert",
+        supabaseAdmin.from("clicks").insert({
+          link_id: link!.id,
+          mode_at_click: modeAtClick,
+          ip: ip || null,
+          country,
+          device,
+          is_vpn: false,
+          redirect_ms: redirectMs,
+          utm_source: url.searchParams.get("utm_source"),
+          utm_medium: url.searchParams.get("utm_medium"),
+          utm_campaign: url.searchParams.get("utm_campaign"),
+        }),
+      ),
+    ]);
+    console.log(
+      `[redirect] tracking done`,
+      results.map((r) => r.status).join(","),
+    );
+  })();
+
   void waitUntilSafe(trackingPromise);
 
   return new Response(null, {
