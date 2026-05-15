@@ -569,10 +569,6 @@ function AdminPage() {
                         <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
                         {meta.label}
                       </span>
-                      <SpeedBadge
-                        last={l.last_redirect_ms ?? 0}
-                        avg={l.avg_redirect_ms ?? 0}
-                      />
                     </div>
 
                     <ModePills l={l} onChange={(m) => setMode(l, m)} />
