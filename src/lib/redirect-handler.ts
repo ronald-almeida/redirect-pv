@@ -146,7 +146,7 @@ export async function handleRedirect(
       }
     }
   });
-  waitUntil(trackingPromise);
+  void waitUntilSafe(trackingPromise);
 
   return new Response(null, {
     status: 302,
