@@ -218,11 +218,20 @@ export async function handleRedirect(
     ip,
   );
 
+  // Measure end-to-end handler time so we can store it on the click row
+  // and update the link's running average. Captured BEFORE the response
+  // is built so it reflects the actual redirect latency.
+  const redirectMs = Date.now() - startTime;
+
   // Fire-and-forget tracking. On Workers we hand the promise to
   // `waitUntil` so the runtime keeps the worker alive until the writes
   // finish, but the 302 below ships immediately.
   const trackingPromise = Promise.allSettled([
     supabaseAdmin.rpc("increment_link_click", { _link_id: link.id }),
+    supabaseAdmin.rpc("record_redirect_metrics", {
+      _link_id: link.id,
+      _ms: redirectMs,
+    }),
     supabaseAdmin.from("clicks").insert({
       link_id: link.id,
       mode_at_click: modeAtClick,
@@ -230,6 +239,7 @@ export async function handleRedirect(
       country,
       device,
       is_vpn: false,
+      redirect_ms: redirectMs,
       utm_source: url.searchParams.get("utm_source"),
       utm_medium: url.searchParams.get("utm_medium"),
       utm_campaign: url.searchParams.get("utm_campaign"),
@@ -254,6 +264,7 @@ export async function handleRedirect(
       Location: destination,
       "Cache-Control": "no-store",
       "X-Cache": cacheHit ? "HIT" : "MISS",
+      "Server-Timing": `redirect;dur=${redirectMs}`,
     },
   });
 }
