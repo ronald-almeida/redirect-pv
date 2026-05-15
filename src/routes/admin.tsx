@@ -66,6 +66,7 @@ interface LinkRow {
   created_at: string;
   avg_redirect_ms?: number | null;
   last_redirect_ms?: number | null;
+  total_redirects?: number | null;
 }
 
 const DEFAULTS = {
