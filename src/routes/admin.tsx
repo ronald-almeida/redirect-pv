@@ -331,7 +331,7 @@ function AdminPage() {
   };
 
   const copyLink = (slug: string) => {
-    navigator.clipboard.writeText(`${origin}/r/${slug}`);
+    navigator.clipboard.writeText(`${origin}/api/public/r/${slug}`);
   };
 
   const handleSignOut = async () => {
@@ -546,7 +546,7 @@ function AdminPage() {
                         <Copy className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="ghost" asChild title="Abrir">
-                        <a href={`/r/${l.slug}`} target="_blank" rel="noreferrer">
+                        <a href={`/api/public/r/${l.slug}`} target="_blank" rel="noreferrer">
                           <ExternalLink className="h-4 w-4" />
                         </a>
                       </Button>
@@ -619,7 +619,7 @@ function AdminPage() {
                                 className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-3 text-sm hover:bg-secondary"
                               >
                                 <span className="truncate text-muted-foreground">
-                                  {origin}/r/{l.slug}
+                                  {origin}/api/public/r/{l.slug}
                                 </span>
                                 <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                               </button>
@@ -654,7 +654,7 @@ function AdminPage() {
                         <div className="flex flex-col items-center gap-2 lg:w-44">
                           <div className="rounded-lg bg-white p-2.5">
                             <QRCodeSVG
-                              value={`${origin}/r/${l.slug}`}
+                              value={`${origin}/api/public/r/${l.slug}`}
                               size={140}
                               level="M"
                             />
