@@ -17,6 +17,7 @@ import {
 import {
   ChevronDown,
   Copy,
+  Check,
   Trash2,
   ExternalLink,
   Settings2,
@@ -334,8 +335,13 @@ function AdminPage() {
     load();
   };
 
+  const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const copyLink = (slug: string) => {
     navigator.clipboard.writeText(`${origin}/r/${slug}`);
+    setCopiedSlug(slug);
+    setTimeout(() => {
+      setCopiedSlug((s) => (s === slug ? null : s));
+    }, 2000);
   };
 
   const handleSignOut = async () => {
@@ -541,14 +547,25 @@ function AdminPage() {
                     </div>
 
                     <div className="flex items-center gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => copyLink(l.slug)}
-                        title="Copiar link"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
+                      <div className="relative flex items-center">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => copyLink(l.slug)}
+                          title="Copiar link"
+                        >
+                          {copiedSlug === l.slug ? (
+                            <Check className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                        {copiedSlug === l.slug && (
+                          <span className="absolute left-full ml-2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs text-background">
+                            Link copiado!
+                          </span>
+                        )}
+                      </div>
                       <Button size="icon" variant="ghost" asChild title="Abrir">
                         <a href={`/r/${l.slug}`} target="_blank" rel="noreferrer">
                           <ExternalLink className="h-4 w-4" />
