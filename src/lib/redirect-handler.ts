@@ -2,22 +2,40 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // Cloudflare Workers provides a top-level `waitUntil` from the
 // `cloudflare:workers` virtual module that hooks into the current
-// request's execution context. We resolve it lazily so non-Workers
-// runtimes (local dev SSR) fall back to a no-op without crashing.
+// request's execution context. We resolve it EAGERLY at module load
+// so the first request doesn't lose its tracking promise to the async
+// dynamic import resolving after the response is sent.
 let waitUntilImpl: ((p: Promise<unknown>) => void) | null = null;
-let waitUntilResolved = false;
+const waitUntilReady: Promise<void> = (async () => {
+  try {
+    // @ts-expect-error - virtual module provided by the Workers runtime
+    const mod: any = await import(/* @vite-ignore */ "cloudflare:workers");
+    waitUntilImpl = mod.waitUntil ?? null;
+    console.log(`[redirect] waitUntil ${waitUntilImpl ? "ready" : "unavailable"}`);
+  } catch {
+    waitUntilImpl = null;
+    console.log("[redirect] waitUntil unavailable (non-Workers runtime)");
+  }
+})();
+
 async function waitUntilSafe(p: Promise<unknown>): Promise<void> {
-  if (!waitUntilResolved) {
-    waitUntilResolved = true;
+  // Make sure the Workers runtime resolution finished before we decide
+  // whether to register the promise or await it inline.
+  await waitUntilReady;
+  if (waitUntilImpl) {
     try {
-      // @ts-expect-error - virtual module provided by the Workers runtime
-      const mod: any = await import(/* @vite-ignore */ "cloudflare:workers");
-      waitUntilImpl = mod.waitUntil ?? null;
-    } catch {
-      waitUntilImpl = null;
+      waitUntilImpl(p);
+      return;
+    } catch (e) {
+      console.error("[redirect] waitUntil registration failed", e);
     }
   }
-  if (waitUntilImpl) waitUntilImpl(p);
+  // Fallback: await inline so the promise actually completes (e.g. local SSR).
+  try {
+    await p;
+  } catch (e) {
+    console.error("[redirect] inline tracking failed", e);
+  }
 }
 
 // Cloudflare Cache API helpers. `caches.default` exists only in the Workers
