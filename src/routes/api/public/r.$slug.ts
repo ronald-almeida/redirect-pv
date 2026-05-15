@@ -93,8 +93,18 @@ export const Route = createFileRoute("/api/public/r/$slug")({
           ip,
         );
 
-        // Fire-and-forget tracking. Do not await.
-        const trackP = Promise.allSettled([
+        // Await tracking before redirecting. In the Cloudflare Workers
+        // runtime, async work that outlives the response is cancelled unless
+        // explicitly registered with ctx.waitUntil — so a fire-and-forget
+        // promise here gets killed and the click never lands in the DB.
+        // The two writes are tiny and run in parallel; latency impact is
+        // negligible compared to losing tracking entirely.
+        console.log("[redirect] tracking click", {
+          link_id: link.id,
+          slug,
+          mode_at_click: modeAtClick,
+        });
+        const tracking = await Promise.allSettled([
           supabaseAdmin.rpc("increment_link_click", { _link_id: link.id }),
           supabaseAdmin.from("clicks").insert({
             link_id: link.id,
@@ -108,9 +118,14 @@ export const Route = createFileRoute("/api/public/r/$slug")({
             utm_campaign: url.searchParams.get("utm_campaign"),
           }),
         ]);
-        // Best-effort: keep the promise reachable so the runtime doesn't GC it
-        // mid-flight, but never block the redirect on it.
-        void trackP;
+        for (const [i, r] of tracking.entries()) {
+          if (r.status === "rejected") {
+            console.error(`[redirect] tracking step ${i} failed`, r.reason);
+          } else if ((r.value as any)?.error) {
+            console.error(`[redirect] tracking step ${i} error`, (r.value as any).error);
+          }
+        }
+        console.log("[redirect] tracking done");
 
         return new Response(null, {
           status: 302,
