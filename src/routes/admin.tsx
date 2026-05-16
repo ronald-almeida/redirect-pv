@@ -1040,6 +1040,28 @@ function SpeedMonitor({
           {total}
         </span>
       </span>
+      <div className="ml-auto flex items-center gap-1">
+        {onRecompute && (
+          <button
+            type="button"
+            onClick={onRecompute}
+            className="rounded border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            title="Recalcular contadores a partir do histórico de cliques"
+          >
+            Recalcular
+          </button>
+        )}
+        {onReset && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="rounded border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-[#ef4444]/10 hover:text-[#ef4444] hover:border-[#ef4444]/40"
+            title="Zerar contadores deste link"
+          >
+            Resetar contadores
+          </button>
+        )}
+      </div>
     </div>
   );
 }
