@@ -230,6 +230,51 @@ export async function handleRedirect(
     ? "mobile"
     : "desktop";
 
+  // Prefetch / link-preview detection. Browsers (Chrome, Safari) and
+  // messaging apps (WhatsApp, Telegram, Slack, Discord, iMessage) fetch
+  // URLs to render previews — these are NOT real clicks.
+  const purpose =
+    request.headers.get("purpose") ||
+    request.headers.get("x-purpose") ||
+    request.headers.get("sec-purpose") ||
+    "";
+  const isPrefetch =
+    /prefetch|preview|prerender/i.test(purpose) ||
+    request.headers.get("x-moz") === "prefetch" ||
+    request.headers.get("sec-fetch-dest") === "empty" &&
+      request.headers.get("sec-fetch-mode") === "no-cors" &&
+      request.headers.get("sec-fetch-site") === "none";
+
+  // cf-ray dedup: Cloudflare reissues the same ray for retries of the same
+  // request. Skip tracking if we've already counted this ray recently.
+  const cfRay = request.headers.get("cf-ray") || "";
+  let isDuplicate = false;
+  if (cfRay) {
+    const rayKey = new Request(`https://cache.internal/ray/${cfRay}`);
+    const cache = getEdgeCache();
+    if (cache) {
+      try {
+        const hit = await cache.match(rayKey);
+        if (hit) {
+          isDuplicate = true;
+        } else {
+          void waitUntilSafe(
+            cache.put(
+              rayKey,
+              new Response("1", {
+                headers: { "Cache-Control": "public, max-age=60" },
+              }),
+            ),
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const skipTracking = isBot || isPrefetch || isDuplicate;
+
   const { url: destination, mode: modeAtClick } = pickDestination(
     link,
     defaultWaiting,
