@@ -19,13 +19,13 @@
  */
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-sm: 0.25rem;       /* 4px  – chips, small badges */
+  --radius-md: 0.375rem;      /* 6px  – buttons + inputs    */
+  --radius-lg: 0.625rem;      /* 10px – cards               */
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+  --radius-3xl: 1.375rem;
+  --radius-4xl: 1.625rem;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -100,25 +100,25 @@
 }
 
 .dark {
-  --background: #0f0f0f;
+  --background: #0a0a0a;
   --foreground: #fafafa;
-  --card: #1a1a1a;
+  --card: #111111;
   --card-foreground: #fafafa;
-  --popover: #1a1a1a;
+  --popover: #111111;
   --popover-foreground: #fafafa;
   --primary: #6366f1;
   --primary-foreground: #ffffff;
-  --secondary: #242424;
+  --secondary: #1a1a1a;
   --secondary-foreground: #fafafa;
-  --muted: #1f1f1f;
-  --muted-foreground: #a1a1aa;
-  --accent: #2a2a2a;
+  --muted: #161616;
+  --muted-foreground: #71717a;
+  --accent: #1f1f1f;
   --accent-foreground: #fafafa;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --success: #22c55e;
   --warning: #eab308;
-  --border: #2a2a2a;
+  --border: #222222;
   --input: #2a2a2a;
   --ring: #6366f1;
   --chart-1: #6366f1;
@@ -126,13 +126,13 @@
   --chart-3: #eab308;
   --chart-4: #ef4444;
   --chart-5: #a78bfa;
-  --sidebar: #1a1a1a;
+  --sidebar: #111111;
   --sidebar-foreground: #fafafa;
   --sidebar-primary: #6366f1;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #242424;
+  --sidebar-accent: #1a1a1a;
   --sidebar-accent-foreground: #fafafa;
-  --sidebar-border: #2a2a2a;
+  --sidebar-border: #222222;
   --sidebar-ring: #6366f1;
 }
 
@@ -143,6 +143,8 @@
 
   html, body {
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
@@ -150,7 +152,23 @@
     color: var(--color-foreground);
   }
 
-  button, a, input, [role="button"] {
-    transition: all 0.18s ease;
+  button, a, input, textarea, select, [role="button"] {
+    transition: all 0.2s ease;
+  }
+
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    transform: scale(0.97);
+  }
+
+  /* Inputs match the spec: #1a1a1a bg, #2a2a2a border, #555 placeholder */
+  input, textarea, select {
+    background-color: #1a1a1a;
+  }
+  input::placeholder, textarea::placeholder {
+    color: #555555;
+  }
+  input:focus-visible, textarea:focus-visible, select:focus-visible {
+    border-color: var(--color-primary);
   }
 }
