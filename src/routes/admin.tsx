@@ -430,14 +430,14 @@ function AdminPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/15 text-primary">
                 <Shield className="h-4 w-4" />
               </div>
-              <span className="text-base font-semibold tracking-tight">
+              <span className="text-base font-semibold tracking-tight text-primary">
                 CloakPanel
               </span>
             </div>
