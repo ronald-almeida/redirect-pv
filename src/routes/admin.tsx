@@ -266,6 +266,26 @@ function AdminPage() {
     load();
   };
 
+  const handleResetCounters = async (id: string) => {
+    if (!confirm("Zerar contadores deste link? (cliques real/isca/espera não serão apagados)")) return;
+    const { error } = await supabase.rpc("reset_link_counters", { _link_id: id });
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    load();
+    loadStats();
+  };
+
+  const handleRecomputeCounters = async (id: string) => {
+    const { error } = await supabase.rpc("recompute_link_counters", { _link_id: id });
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    load();
+  };
+
   const handleDuplicate = async (l: LinkRow) => {
     const base = l.slug.replace(/-copy(-\d+)?$/, "");
     let candidate = `${base}-copy`;
