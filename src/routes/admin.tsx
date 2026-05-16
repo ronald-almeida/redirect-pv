@@ -1005,12 +1005,14 @@ function SpeedMonitor({
           {avg}ms
         </span>
       </span>
-      <span className="text-muted-foreground">
-        Total:{" "}
+      <span
+        className="text-muted-foreground"
+        title="Soma de todos os redirects rastreados (real + isca + espera). Bots, prefetch e duplicados são ignorados."
+      >
+        Total rastreado (real+isca+espera):{" "}
         <span className="font-semibold tabular-nums text-foreground">
           {total}
-        </span>{" "}
-        redirects
+        </span>
       </span>
     </div>
   );
