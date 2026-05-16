@@ -287,67 +287,77 @@ export async function handleRedirect(
   // is built so it reflects the actual redirect latency.
   const redirectMs = Date.now() - startTime;
 
-  // Fire-and-forget tracking. Each write is independent (Promise.allSettled),
-  // so a failure in one step (e.g. metrics RPC) cannot roll back the others.
-  // Logged explicitly so failures are visible in worker logs.
-  console.log(
-    `[redirect] tracking start link_id=${link.id} slug=${slug} mode=${modeAtClick} ms=${redirectMs}`,
-  );
-
-  const trackStep = async <T,>(label: string, p: PromiseLike<T>): Promise<T | null> => {
-    try {
-      const res: any = await p;
-      if (res?.error) {
-        console.error(`[redirect] ${label} ERROR`, JSON.stringify(res.error));
-      } else {
-        console.log(`[redirect] ${label} OK`);
-      }
-      return res;
-    } catch (e: any) {
-      console.error(
-        `[redirect] ${label} FAILED`,
-        JSON.stringify({ message: e?.message, name: e?.name, stack: e?.stack, raw: e }),
-      );
-      return null;
-    }
-  };
-
-  const trackingPromise = (async () => {
-    const results = await Promise.allSettled([
-      trackStep(
-        "increment_link_click",
-        supabaseAdmin.rpc("increment_link_click", { _link_id: link!.id }),
-      ),
-      trackStep(
-        "record_redirect_metrics",
-        supabaseAdmin.rpc("record_redirect_metrics", {
-          _link_id: link!.id,
-          _ms: redirectMs,
-        }),
-      ),
-      trackStep(
-        "clicks.insert",
-        supabaseAdmin.from("clicks").insert({
-          link_id: link!.id,
-          mode_at_click: modeAtClick,
-          ip: ip || null,
-          country,
-          device,
-          is_vpn: false,
-          redirect_ms: redirectMs,
-          utm_source: url.searchParams.get("utm_source"),
-          utm_medium: url.searchParams.get("utm_medium"),
-          utm_campaign: url.searchParams.get("utm_campaign"),
-        }),
-      ),
-    ]);
+  // Skip tracking entirely for bots, prefetch/preview requests, and
+  // duplicate (cf-ray) hits — these inflate counts and don't represent
+  // real user clicks.
+  if (skipTracking) {
     console.log(
-      `[redirect] tracking done`,
-      results.map((r) => r.status).join(","),
+      `[redirect] tracking skipped link_id=${link.id} slug=${slug} reason=${
+        isBot ? "bot" : isPrefetch ? "prefetch" : "duplicate"
+      }`,
     );
-  })();
+  } else {
+    // Fire-and-forget tracking. Each write is independent (Promise.allSettled),
+    // so a failure in one step (e.g. metrics RPC) cannot roll back the others.
+    console.log(
+      `[redirect] tracking start link_id=${link.id} slug=${slug} mode=${modeAtClick} ms=${redirectMs}`,
+    );
 
-  void waitUntilSafe(trackingPromise);
+    const trackStep = async <T,>(label: string, p: PromiseLike<T>): Promise<T | null> => {
+      try {
+        const res: any = await p;
+        if (res?.error) {
+          console.error(`[redirect] ${label} ERROR`, JSON.stringify(res.error));
+        } else {
+          console.log(`[redirect] ${label} OK`);
+        }
+        return res;
+      } catch (e: any) {
+        console.error(
+          `[redirect] ${label} FAILED`,
+          JSON.stringify({ message: e?.message, name: e?.name, stack: e?.stack, raw: e }),
+        );
+        return null;
+      }
+    };
+
+    const trackingPromise = (async () => {
+      const results = await Promise.allSettled([
+        trackStep(
+          "increment_link_click",
+          supabaseAdmin.rpc("increment_link_click", { _link_id: link!.id }),
+        ),
+        trackStep(
+          "record_redirect_metrics",
+          supabaseAdmin.rpc("record_redirect_metrics", {
+            _link_id: link!.id,
+            _ms: redirectMs,
+          }),
+        ),
+        trackStep(
+          "clicks.insert",
+          supabaseAdmin.from("clicks").insert({
+            link_id: link!.id,
+            mode_at_click: modeAtClick,
+            ip: ip || null,
+            country,
+            device,
+            is_vpn: false,
+            redirect_ms: redirectMs,
+            utm_source: url.searchParams.get("utm_source"),
+            utm_medium: url.searchParams.get("utm_medium"),
+            utm_campaign: url.searchParams.get("utm_campaign"),
+          }),
+        ),
+      ]);
+      console.log(
+        `[redirect] tracking done`,
+        results.map((r) => r.status).join(","),
+      );
+    })();
+
+    void waitUntilSafe(trackingPromise);
+  }
 
   return new Response(null, {
     status: 302,
