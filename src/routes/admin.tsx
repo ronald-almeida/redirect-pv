@@ -266,6 +266,26 @@ function AdminPage() {
     load();
   };
 
+  const handleResetCounters = async (id: string) => {
+    if (!confirm("Zerar contadores deste link? (cliques real/isca/espera não serão apagados)")) return;
+    const { error } = await supabase.rpc("reset_link_counters", { _link_id: id });
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    load();
+    loadStats();
+  };
+
+  const handleRecomputeCounters = async (id: string) => {
+    const { error } = await supabase.rpc("recompute_link_counters", { _link_id: id });
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    load();
+  };
+
   const handleDuplicate = async (l: LinkRow) => {
     const base = l.slug.replace(/-copy(-\d+)?$/, "");
     let candidate = `${base}-copy`;
@@ -648,6 +668,8 @@ function AdminPage() {
                     last={l.last_redirect_ms ?? 0}
                     avg={l.avg_redirect_ms ?? 0}
                     total={l.total_redirects ?? 0}
+                    onReset={() => handleResetCounters(l.id)}
+                    onRecompute={() => handleRecomputeCounters(l.id)}
                   />
 
                   {/* Expanded body */}
@@ -972,10 +994,14 @@ function SpeedMonitor({
   last,
   avg,
   total,
+  onReset,
+  onRecompute,
 }: {
   last: number;
   avg: number;
   total: number;
+  onReset?: () => void;
+  onRecompute?: () => void;
 }) {
   const hasData = last > 0;
   return (
@@ -1014,6 +1040,28 @@ function SpeedMonitor({
           {total}
         </span>
       </span>
+      <div className="ml-auto flex items-center gap-1">
+        {onRecompute && (
+          <button
+            type="button"
+            onClick={onRecompute}
+            className="rounded border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            title="Recalcular contadores a partir do histórico de cliques"
+          >
+            Recalcular
+          </button>
+        )}
+        {onReset && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="rounded border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-[#ef4444]/10 hover:text-[#ef4444] hover:border-[#ef4444]/40"
+            title="Zerar contadores deste link"
+          >
+            Resetar contadores
+          </button>
+        )}
+      </div>
     </div>
   );
 }

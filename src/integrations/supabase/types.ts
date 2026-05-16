@@ -175,10 +175,16 @@ export type Database = {
     }
     Functions: {
       increment_link_click: { Args: { _link_id: string }; Returns: undefined }
+      recompute_all_link_counters: { Args: never; Returns: undefined }
+      recompute_link_counters: {
+        Args: { _link_id: string }
+        Returns: undefined
+      }
       record_redirect_metrics: {
         Args: { _link_id: string; _ms: number }
         Returns: undefined
       }
+      reset_link_counters: { Args: { _link_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
