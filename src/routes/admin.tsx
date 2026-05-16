@@ -994,10 +994,14 @@ function SpeedMonitor({
   last,
   avg,
   total,
+  onReset,
+  onRecompute,
 }: {
   last: number;
   avg: number;
   total: number;
+  onReset?: () => void;
+  onRecompute?: () => void;
 }) {
   const hasData = last > 0;
   return (
