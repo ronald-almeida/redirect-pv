@@ -668,6 +668,8 @@ function AdminPage() {
                     last={l.last_redirect_ms ?? 0}
                     avg={l.avg_redirect_ms ?? 0}
                     total={l.total_redirects ?? 0}
+                    onReset={() => handleResetCounters(l.id)}
+                    onRecompute={() => handleRecomputeCounters(l.id)}
                   />
 
                   {/* Expanded body */}
