@@ -725,10 +725,13 @@ function AdminPage() {
                   <SpeedMonitor
                     last={l.last_redirect_ms ?? 0}
                     avg={l.avg_redirect_ms ?? 0}
-                    total={l.total_redirects ?? 0}
+                    total={s?.total ?? 0}
+                    totalAllTime={l.total_redirects ?? 0}
+                    rangeLabel={rangePresetLabel(rangePreset)}
                     onReset={() => handleResetCounters(l.id)}
                     onRecompute={() => handleRecomputeCounters(l.id)}
                   />
+
 
                   {/* Expanded body */}
                   {isOpen && (
