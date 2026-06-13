@@ -248,22 +248,32 @@ function AdminPage() {
   };
 
   const loadStats = async (range: DateRange = currentRange) => {
-    let q = supabase
-      .from("clicks")
-      .select(
-        "link_id, mode_at_click, country, device, is_vpn, utm_source, created_at",
-      )
-      .order("created_at", { ascending: false })
-      .limit(5000);
-    if (range.start) q = q.gte("created_at", range.start.toISOString());
-    if (range.end) q = q.lt("created_at", range.end.toISOString());
-    const { data, error } = await q;
-    if (error) {
-      console.error(error);
-      return;
+    // Paginate to avoid silently truncating older clicks for long ranges.
+    const PAGE = 1000;
+    const MAX_PAGES = 50; // hard cap → up to 50k clicks
+    const all: ClickRow[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      let q = supabase
+        .from("clicks")
+        .select(
+          "link_id, mode_at_click, country, device, is_vpn, utm_source, created_at",
+        )
+        .order("created_at", { ascending: false })
+        .range(page * PAGE, page * PAGE + PAGE - 1);
+      if (range.start) q = q.gte("created_at", range.start.toISOString());
+      if (range.end) q = q.lt("created_at", range.end.toISOString());
+      const { data, error } = await q;
+      if (error) {
+        console.error(error);
+        return;
+      }
+      const rows = (data ?? []) as ClickRow[];
+      all.push(...rows);
+      if (rows.length < PAGE) break;
     }
-    setStats(aggregate((data ?? []) as ClickRow[]));
+    setStats(aggregate(all));
   };
+
 
   const saveSettings = async () => {
     if (!settingsId) return;
