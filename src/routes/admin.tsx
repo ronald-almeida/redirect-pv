@@ -186,7 +186,7 @@ function AdminPage() {
         { event: "INSERT", schema: "public", table: "clicks" },
         () => {
           if (timer) clearTimeout(timer);
-          timer = setTimeout(() => loadStats(), 250);
+          timer = setTimeout(() => loadStats(currentRange), 250);
         },
       )
       .subscribe();
