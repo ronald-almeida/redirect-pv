@@ -228,14 +228,17 @@ function AdminPage() {
     }
   };
 
-  const loadStats = async () => {
-    const { data, error } = await supabase
+  const loadStats = async (range: DateRange = currentRange) => {
+    let q = supabase
       .from("clicks")
       .select(
         "link_id, mode_at_click, country, device, is_vpn, utm_source, created_at",
       )
       .order("created_at", { ascending: false })
-      .limit(1000);
+      .limit(5000);
+    if (range.start) q = q.gte("created_at", range.start.toISOString());
+    if (range.end) q = q.lt("created_at", range.end.toISOString());
+    const { data, error } = await q;
     if (error) {
       console.error(error);
       return;
