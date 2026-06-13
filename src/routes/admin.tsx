@@ -39,6 +39,16 @@ import {
   type RangePreset,
 } from "@/lib/date-range";
 
+const RANGE_LABEL: Record<RangePreset, string> = {
+  today: "hoje",
+  yesterday: "ontem",
+  "7d": "últimos 7 dias",
+  "30d": "últimos 30 dias",
+  all: "tudo",
+  custom: "período personalizado",
+};
+const rangePresetLabel = (p: RangePreset) => RANGE_LABEL[p] ?? "período";
+
 // Tell the edge cache to drop its copy for this slug so admin edits
 // (mode, real_url, owner_only, active, etc.) take effect immediately
 // instead of waiting for the 30s TTL.
@@ -248,22 +258,32 @@ function AdminPage() {
   };
 
   const loadStats = async (range: DateRange = currentRange) => {
-    let q = supabase
-      .from("clicks")
-      .select(
-        "link_id, mode_at_click, country, device, is_vpn, utm_source, created_at",
-      )
-      .order("created_at", { ascending: false })
-      .limit(5000);
-    if (range.start) q = q.gte("created_at", range.start.toISOString());
-    if (range.end) q = q.lt("created_at", range.end.toISOString());
-    const { data, error } = await q;
-    if (error) {
-      console.error(error);
-      return;
+    // Paginate to avoid silently truncating older clicks for long ranges.
+    const PAGE = 1000;
+    const MAX_PAGES = 50; // hard cap → up to 50k clicks
+    const all: ClickRow[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      let q = supabase
+        .from("clicks")
+        .select(
+          "link_id, mode_at_click, country, device, is_vpn, utm_source, created_at",
+        )
+        .order("created_at", { ascending: false })
+        .range(page * PAGE, page * PAGE + PAGE - 1);
+      if (range.start) q = q.gte("created_at", range.start.toISOString());
+      if (range.end) q = q.lt("created_at", range.end.toISOString());
+      const { data, error } = await q;
+      if (error) {
+        console.error(error);
+        return;
+      }
+      const rows = (data ?? []) as ClickRow[];
+      all.push(...rows);
+      if (rows.length < PAGE) break;
     }
-    setStats(aggregate((data ?? []) as ClickRow[]));
+    setStats(aggregate(all));
   };
+
 
   const saveSettings = async () => {
     if (!settingsId) return;
@@ -715,10 +735,13 @@ function AdminPage() {
                   <SpeedMonitor
                     last={l.last_redirect_ms ?? 0}
                     avg={l.avg_redirect_ms ?? 0}
-                    total={l.total_redirects ?? 0}
+                    total={s?.total ?? 0}
+                    totalAllTime={l.total_redirects ?? 0}
+                    rangeLabel={rangePresetLabel(rangePreset)}
                     onReset={() => handleResetCounters(l.id)}
                     onRecompute={() => handleRecomputeCounters(l.id)}
                   />
+
 
                   {/* Expanded body */}
                   {isOpen && (
@@ -1042,12 +1065,16 @@ function SpeedMonitor({
   last,
   avg,
   total,
+  totalAllTime,
+  rangeLabel,
   onReset,
   onRecompute,
 }: {
   last: number;
   avg: number;
   total: number;
+  totalAllTime: number;
+  rangeLabel: string;
   onReset?: () => void;
   onRecompute?: () => void;
 }) {
@@ -1081,13 +1108,23 @@ function SpeedMonitor({
       </span>
       <span
         className="text-muted-foreground"
-        title="Soma de todos os redirects rastreados (real + isca + espera). Bots, prefetch e duplicados são ignorados."
+        title="Cliques contabilizados no período selecionado (real + isca + espera). Bots, prefetch e duplicados são ignorados."
       >
-        Total rastreado (real+isca+espera):{" "}
+        Cliques no período ({rangeLabel}):{" "}
         <span className="font-semibold tabular-nums text-foreground">
           {total}
         </span>
       </span>
+      <span
+        className="text-muted-foreground"
+        title="Total acumulado desde a criação do link (independente do filtro de data)."
+      >
+        Total geral:{" "}
+        <span className="font-semibold tabular-nums text-foreground/80">
+          {totalAllTime}
+        </span>
+      </span>
+
       <div className="ml-auto flex items-center gap-1">
         {onRecompute && (
           <button
