@@ -298,6 +298,30 @@ export async function handleRedirect(
     };
 
     const trackingPromise = (async () => {
+      // cf-ray dedup happens here (off the hot path). If we've seen this
+      // ray already, skip the writes — it's a Cloudflare retry, not a click.
+      if (cfRay) {
+        const cache = getEdgeCache();
+        if (cache) {
+          try {
+            const rayKey = new Request(`https://cache.internal/ray/${cfRay}`);
+            const hit = await cache.match(rayKey);
+            if (hit) {
+              console.log(`[redirect] tracking skipped reason=duplicate ray=${cfRay}`);
+              return;
+            }
+            await cache.put(
+              rayKey,
+              new Response("1", {
+                headers: { "Cache-Control": "public, max-age=60" },
+              }),
+            );
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
       const results = await Promise.allSettled([
         trackStep(
           "increment_link_click",
