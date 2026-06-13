@@ -39,6 +39,16 @@ import {
   type RangePreset,
 } from "@/lib/date-range";
 
+const RANGE_LABEL: Record<RangePreset, string> = {
+  today: "hoje",
+  yesterday: "ontem",
+  "7d": "últimos 7 dias",
+  "30d": "últimos 30 dias",
+  all: "tudo",
+  custom: "período personalizado",
+};
+const rangePresetLabel = (p: RangePreset) => RANGE_LABEL[p] ?? "período";
+
 // Tell the edge cache to drop its copy for this slug so admin edits
 // (mode, real_url, owner_only, active, etc.) take effect immediately
 // instead of waiting for the 30s TTL.
