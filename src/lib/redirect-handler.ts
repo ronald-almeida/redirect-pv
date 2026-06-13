@@ -245,35 +245,11 @@ export async function handleRedirect(
       request.headers.get("sec-fetch-mode") === "no-cors" &&
       request.headers.get("sec-fetch-site") === "none";
 
-  // cf-ray dedup: Cloudflare reissues the same ray for retries of the same
-  // request. Skip tracking if we've already counted this ray recently.
+  // cf-ray dedup happens INSIDE the tracking promise (off the hot path) so
+  // the redirect response is not blocked by an edge cache lookup.
   const cfRay = request.headers.get("cf-ray") || "";
-  let isDuplicate = false;
-  if (cfRay) {
-    const rayKey = new Request(`https://cache.internal/ray/${cfRay}`);
-    const cache = getEdgeCache();
-    if (cache) {
-      try {
-        const hit = await cache.match(rayKey);
-        if (hit) {
-          isDuplicate = true;
-        } else {
-          void waitUntilSafe(
-            cache.put(
-              rayKey,
-              new Response("1", {
-                headers: { "Cache-Control": "public, max-age=60" },
-              }),
-            ),
-          );
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }
 
-  const skipTracking = isBot || isPrefetch || isDuplicate;
+  const skipTracking = isBot || isPrefetch;
 
   const { url: destination, mode: modeAtClick } = pickDestination(
     link,
