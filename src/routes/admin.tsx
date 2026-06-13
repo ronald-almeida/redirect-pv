@@ -158,6 +158,24 @@ function AdminPage() {
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
+  // Refetch stats whenever the date range changes.
+  useEffect(() => {
+    if (!checking) loadStats(currentRange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRange.start?.getTime(), currentRange.end?.getTime(), checking]);
+
+  // Auto-refresh at BRT midnight when viewing "today" so counters reset visually.
+  useEffect(() => {
+    if (rangePreset !== "today") return;
+    const now = new Date();
+    const tomorrow = rangeForPreset("today", new Date(now.getTime() + 86400_000));
+    const msUntil = (tomorrow.start?.getTime() ?? now.getTime()) - now.getTime();
+    const t = setTimeout(() => loadStats(rangeForPreset("today")), Math.max(1000, msUntil));
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangePreset, stats]);
+
+
   // Realtime: live click updates
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
