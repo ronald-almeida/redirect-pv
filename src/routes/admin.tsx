@@ -1055,12 +1055,16 @@ function SpeedMonitor({
   last,
   avg,
   total,
+  totalAllTime,
+  rangeLabel,
   onReset,
   onRecompute,
 }: {
   last: number;
   avg: number;
   total: number;
+  totalAllTime: number;
+  rangeLabel: string;
   onReset?: () => void;
   onRecompute?: () => void;
 }) {
@@ -1094,13 +1098,23 @@ function SpeedMonitor({
       </span>
       <span
         className="text-muted-foreground"
-        title="Soma de todos os redirects rastreados (real + isca + espera). Bots, prefetch e duplicados são ignorados."
+        title="Cliques contabilizados no período selecionado (real + isca + espera). Bots, prefetch e duplicados são ignorados."
       >
-        Total rastreado (real+isca+espera):{" "}
+        Cliques no período ({rangeLabel}):{" "}
         <span className="font-semibold tabular-nums text-foreground">
           {total}
         </span>
       </span>
+      <span
+        className="text-muted-foreground"
+        title="Total acumulado desde a criação do link (independente do filtro de data)."
+      >
+        Total geral:{" "}
+        <span className="font-semibold tabular-nums text-foreground/80">
+          {totalAllTime}
+        </span>
+      </span>
+
       <div className="ml-auto flex items-center gap-1">
         {onRecompute && (
           <button
