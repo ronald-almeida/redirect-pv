@@ -1113,3 +1113,83 @@ function SpeedMonitor({
     </div>
   );
 }
+
+function DateRangeBar({
+  preset,
+  onPreset,
+  customStart,
+  customEnd,
+  onCustomStart,
+  onCustomEnd,
+  range,
+}: {
+  preset: RangePreset;
+  onPreset: (p: RangePreset) => void;
+  customStart: string;
+  customEnd: string;
+  onCustomStart: (s: string) => void;
+  onCustomEnd: (s: string) => void;
+  range: DateRange;
+}) {
+  const presets: { id: RangePreset; label: string }[] = [
+    { id: "today", label: "Hoje" },
+    { id: "yesterday", label: "Ontem" },
+    { id: "7d", label: "7 dias" },
+    { id: "30d", label: "30 dias" },
+    { id: "all", label: "Tudo" },
+    { id: "custom", label: "Personalizado" },
+  ];
+  const summary = (() => {
+    if (preset === "all") return "Todos os cliques registrados";
+    if (range.start && range.end)
+      return `${formatBrtDate(range.start)} → ${formatBrtDate(new Date(range.end.getTime() - 1))} (BRT)`;
+    if (range.start) return `Desde ${formatBrtDate(range.start)} (BRT)`;
+    return "—";
+  })();
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+          Período
+        </span>
+        <div className="inline-flex flex-wrap gap-1">
+          {presets.map((p) => {
+            const active = preset === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onPreset(p.id)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        {preset === "custom" && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => onCustomStart(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            />
+            <span className="text-xs text-muted-foreground">até</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => onCustomEnd(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            />
+          </div>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">{summary}</span>
+      </div>
+    </div>
+  );
+}
