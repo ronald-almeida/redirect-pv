@@ -30,6 +30,14 @@ import {
 } from "lucide-react";
 import { LinkAnalytics } from "@/components/LinkAnalytics";
 import { type ClickRow, type LinkAgg, aggregate } from "@/lib/analytics";
+import {
+  customRange,
+  formatBrtDate,
+  rangeForPreset,
+  todayBrtYmd,
+  type DateRange,
+  type RangePreset,
+} from "@/lib/date-range";
 
 // Tell the edge cache to drop its copy for this slug so admin edits
 // (mode, real_url, owner_only, active, etc.) take effect immediately
@@ -123,6 +131,14 @@ function AdminPage() {
   const [origin, setOrigin] = useState("");
 
   const [stats, setStats] = useState<Record<string, LinkAgg>>({});
+  const [rangePreset, setRangePreset] = useState<RangePreset>("today");
+  const [customStart, setCustomStart] = useState<string>(todayBrtYmd());
+  const [customEnd, setCustomEnd] = useState<string>(todayBrtYmd());
+
+  const currentRange: DateRange = useMemo(() => {
+    if (rangePreset === "custom") return customRange(customStart, customEnd);
+    return rangeForPreset(rangePreset);
+  }, [rangePreset, customStart, customEnd]);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -142,6 +158,24 @@ function AdminPage() {
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
+  // Refetch stats whenever the date range changes.
+  useEffect(() => {
+    if (!checking) loadStats(currentRange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRange.start?.getTime(), currentRange.end?.getTime(), checking]);
+
+  // Auto-refresh at BRT midnight when viewing "today" so counters reset visually.
+  useEffect(() => {
+    if (rangePreset !== "today") return;
+    const now = new Date();
+    const tomorrow = rangeForPreset("today", new Date(now.getTime() + 86400_000));
+    const msUntil = (tomorrow.start?.getTime() ?? now.getTime()) - now.getTime();
+    const t = setTimeout(() => loadStats(rangeForPreset("today")), Math.max(1000, msUntil));
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangePreset, stats]);
+
+
   // Realtime: live click updates
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -152,7 +186,7 @@ function AdminPage() {
         { event: "INSERT", schema: "public", table: "clicks" },
         () => {
           if (timer) clearTimeout(timer);
-          timer = setTimeout(() => loadStats(), 250);
+          timer = setTimeout(() => loadStats(currentRange), 250);
         },
       )
       .subscribe();
@@ -160,7 +194,8 @@ function AdminPage() {
       if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRange.start?.getTime(), currentRange.end?.getTime()]);
 
   // Realtime: live link updates (speed monitor, click_count, etc.)
   useEffect(() => {
@@ -212,14 +247,17 @@ function AdminPage() {
     }
   };
 
-  const loadStats = async () => {
-    const { data, error } = await supabase
+  const loadStats = async (range: DateRange = currentRange) => {
+    let q = supabase
       .from("clicks")
       .select(
         "link_id, mode_at_click, country, device, is_vpn, utm_source, created_at",
       )
       .order("created_at", { ascending: false })
-      .limit(1000);
+      .limit(5000);
+    if (range.start) q = q.gte("created_at", range.start.toISOString());
+    if (range.end) q = q.lt("created_at", range.end.toISOString());
+    const { data, error } = await q;
     if (error) {
       console.error(error);
       return;
@@ -511,7 +549,17 @@ function AdminPage() {
           )}
         </div>
 
-        {/* Search + create */}
+        {/* Date range filter */}
+        <DateRangeBar
+          preset={rangePreset}
+          onPreset={setRangePreset}
+          customStart={customStart}
+          customEnd={customEnd}
+          onCustomStart={setCustomStart}
+          onCustomEnd={setCustomEnd}
+          range={currentRange}
+        />
+
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1061,6 +1109,86 @@ function SpeedMonitor({
             Resetar contadores
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function DateRangeBar({
+  preset,
+  onPreset,
+  customStart,
+  customEnd,
+  onCustomStart,
+  onCustomEnd,
+  range,
+}: {
+  preset: RangePreset;
+  onPreset: (p: RangePreset) => void;
+  customStart: string;
+  customEnd: string;
+  onCustomStart: (s: string) => void;
+  onCustomEnd: (s: string) => void;
+  range: DateRange;
+}) {
+  const presets: { id: RangePreset; label: string }[] = [
+    { id: "today", label: "Hoje" },
+    { id: "yesterday", label: "Ontem" },
+    { id: "7d", label: "7 dias" },
+    { id: "30d", label: "30 dias" },
+    { id: "all", label: "Tudo" },
+    { id: "custom", label: "Personalizado" },
+  ];
+  const summary = (() => {
+    if (preset === "all") return "Todos os cliques registrados";
+    if (range.start && range.end)
+      return `${formatBrtDate(range.start)} → ${formatBrtDate(new Date(range.end.getTime() - 1))} (BRT)`;
+    if (range.start) return `Desde ${formatBrtDate(range.start)} (BRT)`;
+    return "—";
+  })();
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+          Período
+        </span>
+        <div className="inline-flex flex-wrap gap-1">
+          {presets.map((p) => {
+            const active = preset === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onPreset(p.id)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        {preset === "custom" && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => onCustomStart(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            />
+            <span className="text-xs text-muted-foreground">até</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => onCustomEnd(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            />
+          </div>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">{summary}</span>
       </div>
     </div>
   );

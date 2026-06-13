@@ -40,7 +40,7 @@ async function waitUntilSafe(p: Promise<unknown>): Promise<void> {
 
 // Cloudflare Cache API helpers. `caches.default` exists only in the Workers
 // runtime; in local dev SSR we silently no-op.
-const CACHE_TTL_SECONDS = 30;
+const CACHE_TTL_SECONDS = 300;
 const cacheKeyForSlug = (slug: string) =>
   new Request(`https://cache.internal/link/${encodeURIComponent(slug)}`);
 const SETTINGS_CACHE_KEY = new Request(
@@ -245,35 +245,11 @@ export async function handleRedirect(
       request.headers.get("sec-fetch-mode") === "no-cors" &&
       request.headers.get("sec-fetch-site") === "none";
 
-  // cf-ray dedup: Cloudflare reissues the same ray for retries of the same
-  // request. Skip tracking if we've already counted this ray recently.
+  // cf-ray dedup happens INSIDE the tracking promise (off the hot path) so
+  // the redirect response is not blocked by an edge cache lookup.
   const cfRay = request.headers.get("cf-ray") || "";
-  let isDuplicate = false;
-  if (cfRay) {
-    const rayKey = new Request(`https://cache.internal/ray/${cfRay}`);
-    const cache = getEdgeCache();
-    if (cache) {
-      try {
-        const hit = await cache.match(rayKey);
-        if (hit) {
-          isDuplicate = true;
-        } else {
-          void waitUntilSafe(
-            cache.put(
-              rayKey,
-              new Response("1", {
-                headers: { "Cache-Control": "public, max-age=60" },
-              }),
-            ),
-          );
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }
 
-  const skipTracking = isBot || isPrefetch || isDuplicate;
+  const skipTracking = isBot || isPrefetch;
 
   const { url: destination, mode: modeAtClick } = pickDestination(
     link,
@@ -322,6 +298,30 @@ export async function handleRedirect(
     };
 
     const trackingPromise = (async () => {
+      // cf-ray dedup happens here (off the hot path). If we've seen this
+      // ray already, skip the writes — it's a Cloudflare retry, not a click.
+      if (cfRay) {
+        const cache = getEdgeCache();
+        if (cache) {
+          try {
+            const rayKey = new Request(`https://cache.internal/ray/${cfRay}`);
+            const hit = await cache.match(rayKey);
+            if (hit) {
+              console.log(`[redirect] tracking skipped reason=duplicate ray=${cfRay}`);
+              return;
+            }
+            await cache.put(
+              rayKey,
+              new Response("1", {
+                headers: { "Cache-Control": "public, max-age=60" },
+              }),
+            );
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
       const results = await Promise.allSettled([
         trackStep(
           "increment_link_click",
