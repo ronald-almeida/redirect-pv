@@ -131,6 +131,14 @@ function AdminPage() {
   const [origin, setOrigin] = useState("");
 
   const [stats, setStats] = useState<Record<string, LinkAgg>>({});
+  const [rangePreset, setRangePreset] = useState<RangePreset>("today");
+  const [customStart, setCustomStart] = useState<string>(todayBrtYmd());
+  const [customEnd, setCustomEnd] = useState<string>(todayBrtYmd());
+
+  const currentRange: DateRange = useMemo(() => {
+    if (rangePreset === "custom") return customRange(customStart, customEnd);
+    return rangeForPreset(rangePreset);
+  }, [rangePreset, customStart, customEnd]);
 
   useEffect(() => {
     setOrigin(window.location.origin);
