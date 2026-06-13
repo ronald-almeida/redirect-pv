@@ -40,7 +40,7 @@ async function waitUntilSafe(p: Promise<unknown>): Promise<void> {
 
 // Cloudflare Cache API helpers. `caches.default` exists only in the Workers
 // runtime; in local dev SSR we silently no-op.
-const CACHE_TTL_SECONDS = 30;
+const CACHE_TTL_SECONDS = 300;
 const cacheKeyForSlug = (slug: string) =>
   new Request(`https://cache.internal/link/${encodeURIComponent(slug)}`);
 const SETTINGS_CACHE_KEY = new Request(
