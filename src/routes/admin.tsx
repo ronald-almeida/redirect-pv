@@ -194,7 +194,8 @@ function AdminPage() {
       if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRange.start?.getTime(), currentRange.end?.getTime()]);
 
   // Realtime: live link updates (speed monitor, click_count, etc.)
   useEffect(() => {
