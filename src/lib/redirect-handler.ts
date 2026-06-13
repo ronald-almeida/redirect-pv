@@ -8,8 +8,10 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 let waitUntilImpl: ((p: Promise<unknown>) => void) | null = null;
 const waitUntilReady: Promise<void> = (async () => {
   try {
-    // @ts-expect-error - virtual module provided by the Workers runtime
-    const mod: any = await import(/* @vite-ignore */ "cloudflare:workers");
+    // Use a dynamic specifier so Rollup/Vite cannot statically analyze and
+    // attempt to resolve the Workers-only virtual module at build time.
+    const specifier = "cloudflare" + ":" + "workers";
+    const mod: any = await import(/* @vite-ignore */ specifier);
     waitUntilImpl = mod.waitUntil ?? null;
     console.log(`[redirect] waitUntil ${waitUntilImpl ? "ready" : "unavailable"}`);
   } catch {
