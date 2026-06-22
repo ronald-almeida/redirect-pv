@@ -537,7 +537,7 @@ function AdminPage() {
       </header>
 
 
-      <main className="mx-auto max-w-6xl space-y-5 px-6 py-8">
+      <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:space-y-5 sm:px-6 sm:py-8">
         {/* Global settings collapsible */}
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <button
