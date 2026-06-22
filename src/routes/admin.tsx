@@ -599,15 +599,15 @@ function AdminPage() {
               className="bg-card pl-9"
             />
           </div>
-          <form onSubmit={handleCreate} className="flex gap-2">
+          <form onSubmit={handleCreate} className="flex min-w-0 gap-2">
             <Input
               placeholder="novo-slug"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              className="bg-card sm:w-56"
+              className="min-w-0 bg-card sm:w-56"
               required
             />
-            <Button type="submit" className="gap-1.5">
+            <Button type="submit" className="shrink-0 gap-1.5">
               <Plus className="h-4 w-4" />
               Adicionar
             </Button>
