@@ -636,105 +636,121 @@ function AdminPage() {
               return (
                 <div
                   key={l.id}
-                  className={`overflow-hidden rounded-xl border bg-card transition-colors ${l.active ? "border-border" : "border-border/60 opacity-70"}`}
+                  className={`group overflow-hidden rounded-xl border bg-card shadow-sm transition-colors ${l.active ? "border-border" : "border-border/60 opacity-70"}`}
                 >
-                  {/* Collapsed header row */}
-                  <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-                    <button
-                      type="button"
-                      onClick={() => setExpanded((p) => ({ ...p, [l.id]: !isOpen }))}
-                      className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
-                      title={isOpen ? "Recolher" : "Expandir"}
-                    >
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                      />
-                    </button>
-
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-base font-semibold leading-tight">
-                          {l.name?.trim() || `/${l.slug}`}
-                        </div>
-                        {l.name?.trim() && (
-                          <div className="truncate font-mono text-xs text-muted-foreground">
-                            /{l.slug}
-                          </div>
-                        )}
-                      </div>
-                      <span
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.activeCls}`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-                        {meta.label}
-                      </span>
-                    </div>
-
-                    <ModePills l={l} onChange={(m) => setMode(l, m)} />
-
-                    <div className="flex items-center gap-2 pl-2">
-                      <span className="text-xs text-muted-foreground">
-                        {l.active ? "Ativo" : "Inativo"}
-                      </span>
-                      <Switch
-                        checked={l.active}
-                        onCheckedChange={(v) => setActive(l, v)}
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <div className="relative flex items-center">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => copyLink(l.slug)}
-                          title="Copiar link"
+                  {/* Card header */}
+                  <div className="px-4 py-3.5 sm:px-5 sm:py-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      {/* Identity */}
+                      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setExpanded((p) => ({ ...p, [l.id]: !isOpen }))}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          title={isOpen ? "Recolher" : "Expandir"}
                         >
-                          {copiedSlug === l.slug ? (
-                            <Check className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                          />
+                        </button>
+                        <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold leading-tight sm:text-base">
+                            {l.name?.trim() || `/${l.slug}`}
+                          </div>
+                          {l.name?.trim() && (
+                            <div className="truncate font-mono text-[11px] text-muted-foreground sm:text-xs">
+                              /{l.slug}
+                            </div>
                           )}
-                        </Button>
-                        {copiedSlug === l.slug && (
-                          <span className="absolute left-full ml-2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs text-background">
-                            Link copiado!
-                          </span>
-                        )}
+                        </div>
+                        <span
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.activeCls}`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+                          {meta.label}
+                        </span>
                       </div>
-                      <Button size="icon" variant="ghost" asChild title="Abrir">
-                        <a href={`/r/${l.slug}`} target="_blank" rel="noreferrer">
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDuplicate(l)}
-                        title="Duplicar"
-                      >
-                        <Files className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => openEdit(l)}
-                        title="Editar página de espera"
-                      >
-                        <Settings2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDelete(l.id)}
-                        title="Remover"
-                        className="text-muted-foreground hover:text-[#ef4444]"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+
+                      {/* Controls */}
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="flex items-center justify-between gap-2 sm:justify-start">
+                          <ModePills l={l} onChange={(m) => setMode(l, m)} />
+                          <div className="flex items-center gap-2 sm:border-l sm:border-border sm:pl-3">
+                            <span className="hidden text-xs text-muted-foreground sm:inline">
+                              {l.active ? "Ativo" : "Inativo"}
+                            </span>
+                            <Switch
+                              checked={l.active}
+                              onCheckedChange={(v) => setActive(l, v)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-1">
+                          <div className="relative flex items-center">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => copyLink(l.slug)}
+                              title="Copiar link"
+                              className="h-8 w-8 sm:h-9 sm:w-9"
+                            >
+                              {copiedSlug === l.slug ? (
+                                <Check className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                            </Button>
+                            {copiedSlug === l.slug && (
+                              <span className="absolute left-full ml-2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs text-background">
+                                Link copiado!
+                              </span>
+                            )}
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            asChild
+                            title="Abrir"
+                            className="h-8 w-8 sm:h-9 sm:w-9"
+                          >
+                            <a href={`/r/${l.slug}`} target="_blank" rel="noreferrer">
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDuplicate(l)}
+                            title="Duplicar"
+                            className="h-8 w-8 sm:h-9 sm:w-9"
+                          >
+                            <Files className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => openEdit(l)}
+                            title="Editar página de espera"
+                            className="h-8 w-8 sm:h-9 sm:w-9"
+                          >
+                            <Settings2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDelete(l.id)}
+                            title="Remover"
+                            className="h-8 w-8 text-muted-foreground hover:text-[#ef4444] sm:h-9 sm:w-9"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </div>
+
 
                   {/* Stats strip (always visible) */}
                   <div className="grid grid-cols-3 gap-px border-t border-border bg-border">
