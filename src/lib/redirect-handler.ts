@@ -1,48 +1,50 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-// Cloudflare Workers provides a top-level `waitUntil` from the
-// `cloudflare:workers` virtual module that hooks into the current
-// request's execution context. We resolve it EAGERLY at module load
-// so the first request doesn't lose its tracking promise to the async
-// dynamic import resolving after the response is sent.
+// Cloudflare Workers `waitUntil` — resolved eagerly at module load.
 let waitUntilImpl: ((p: Promise<unknown>) => void) | null = null;
 const waitUntilReady: Promise<void> = (async () => {
   try {
-    // Use a dynamic specifier so Rollup/Vite cannot statically analyze and
-    // attempt to resolve the Workers-only virtual module at build time.
     const specifier = "cloudflare" + ":" + "workers";
     const mod: any = await import(/* @vite-ignore */ specifier);
     waitUntilImpl = mod.waitUntil ?? null;
-    console.log(`[redirect] waitUntil ${waitUntilImpl ? "ready" : "unavailable"}`);
   } catch {
     waitUntilImpl = null;
-    console.log("[redirect] waitUntil unavailable (non-Workers runtime)");
   }
 })();
 
-async function waitUntilSafe(p: Promise<unknown>): Promise<void> {
-  // Make sure the Workers runtime resolution finished before we decide
-  // whether to register the promise or await it inline.
-  await waitUntilReady;
+function scheduleBackground(p: Promise<unknown>): void {
+  // Fire-and-forget. Don't block the response.
   if (waitUntilImpl) {
     try {
       waitUntilImpl(p);
       return;
-    } catch (e) {
-      console.error("[redirect] waitUntil registration failed", e);
+    } catch {
+      /* fall through */
     }
   }
-  // Fallback: await inline so the promise actually completes (e.g. local SSR).
-  try {
-    await p;
-  } catch (e) {
-    console.error("[redirect] inline tracking failed", e);
-  }
+  // If waitUntil isn't ready yet, await its resolution then register.
+  // This still runs OFF the hot path because the caller doesn't await us.
+  void (async () => {
+    await waitUntilReady;
+    if (waitUntilImpl) {
+      try {
+        waitUntilImpl(p);
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
+    try {
+      await p;
+    } catch {
+      /* ignore */
+    }
+  })();
 }
 
-// Cloudflare Cache API helpers. `caches.default` exists only in the Workers
-// runtime; in local dev SSR we silently no-op.
-const CACHE_TTL_SECONDS = 300;
+// Edge cache. We serve stale entries instantly and revalidate in the background.
+const CACHE_TTL_SECONDS = 300; // fresh window
+const CACHE_SWR_SECONDS = 3600; // entries up to 1h old still get served, then refresh
 const cacheKeyForSlug = (slug: string) =>
   new Request(`https://cache.internal/link/${encodeURIComponent(slug)}`);
 const SETTINGS_CACHE_KEY = new Request(
@@ -51,40 +53,44 @@ const SETTINGS_CACHE_KEY = new Request(
 
 function getEdgeCache(): Cache | null {
   try {
-    // @ts-ignore - `caches` is a Workers global
+    // @ts-ignore - Workers global
     return typeof caches !== "undefined" && caches?.default ? caches.default : null;
   } catch {
     return null;
   }
 }
 
-async function readCachedJSON<T>(key: Request): Promise<T | null> {
+type CacheEntry<T> = { value: T; storedAt: number };
+
+async function readCacheEntry<T>(key: Request): Promise<CacheEntry<T> | null> {
   const cache = getEdgeCache();
   if (!cache) return null;
   try {
     const hit = await cache.match(key);
     if (!hit) return null;
-    return (await hit.json()) as T;
+    return (await hit.json()) as CacheEntry<T>;
   } catch {
     return null;
   }
 }
 
-async function writeCachedJSON(key: Request, value: unknown, ttl = CACHE_TTL_SECONDS) {
+async function writeCacheEntry(key: Request, value: unknown) {
   const cache = getEdgeCache();
   if (!cache) return;
   try {
+    const entry: CacheEntry<unknown> = { value, storedAt: Date.now() };
     await cache.put(
       key,
-      new Response(JSON.stringify(value), {
+      new Response(JSON.stringify(entry), {
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": `public, max-age=${ttl}`,
+          // Keep on edge for up to SWR window; we manage freshness ourselves.
+          "Cache-Control": `public, max-age=${CACHE_SWR_SECONDS}, s-maxage=${CACHE_SWR_SECONDS}`,
         },
       }),
     );
   } catch {
-    /* ignore cache failures */
+    /* ignore */
   }
 }
 
@@ -103,7 +109,7 @@ const BOT_REGEX =
 
 const FALLBACK = "https://google.com";
 
-type CachedLink = {
+type LinkRow = {
   id: string;
   mode: string;
   real_url: string | null;
@@ -119,10 +125,31 @@ type CachedLink = {
   rotation_index: number;
   owner_only: boolean;
   owner_ips: string[];
-} | null;
+};
+
+const LINK_COLUMNS =
+  "id, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index, owner_only, owner_ips";
+
+async function fetchLink(slug: string): Promise<LinkRow | null> {
+  const { data } = await supabaseAdmin
+    .from("links")
+    .select(LINK_COLUMNS)
+    .eq("slug", slug)
+    .maybeSingle();
+  return (data as LinkRow) ?? null;
+}
+
+async function fetchDefaultWaiting(): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("settings")
+    .select("default_waiting_url")
+    .limit(1)
+    .maybeSingle();
+  return data?.default_waiting_url ?? null;
+}
 
 function pickDestination(
-  link: any,
+  link: LinkRow,
   defaultWaiting: string | null,
   isBot: boolean,
   ip: string,
@@ -130,19 +157,19 @@ function pickDestination(
   const decoy = link.decoy_url || defaultWaiting || FALLBACK;
   const waiting = defaultWaiting || link.decoy_url || FALLBACK;
 
-  if (isBot) return { url: decoy, mode: `decoy:bot` };
-  if (!link.active) return { url: decoy, mode: `decoy:inactive` };
+  if (isBot) return { url: decoy, mode: "decoy:bot" };
+  if (!link.active) return { url: decoy, mode: "decoy:inactive" };
   if (link.expires_at && new Date(link.expires_at).getTime() < Date.now())
-    return { url: decoy, mode: `decoy:expired` };
+    return { url: decoy, mode: "decoy:expired" };
   if (Array.isArray(link.blocked_ips) && ip && link.blocked_ips.includes(ip))
-    return { url: decoy, mode: `decoy:blocked_ip` };
+    return { url: decoy, mode: "decoy:blocked_ip" };
   if (
     link.owner_only &&
     (!ip || !Array.isArray(link.owner_ips) || !link.owner_ips.includes(ip))
   )
-    return { url: decoy, mode: `decoy:owner_only` };
+    return { url: decoy, mode: "decoy:owner_only" };
   if (link.click_limit !== null && link.click_count >= link.click_limit)
-    return { url: waiting, mode: `waiting:limit` };
+    return { url: waiting, mode: "waiting:limit" };
 
   if (link.mode === "waiting") return { url: waiting, mode: "waiting" };
   if (link.mode === "decoy") return { url: decoy, mode: "decoy" };
@@ -171,70 +198,78 @@ export async function handleRedirect(
   slug: string,
 ): Promise<Response> {
   const startTime = Date.now();
-  console.log(`[redirect] hit slug=${slug}`);
   const url = new URL(request.url);
   const linkCacheKey = cacheKeyForSlug(slug);
 
-  // 1. Try the edge cache first.
-  let link = await readCachedJSON<CachedLink>(linkCacheKey);
-  let cacheHit = link !== null;
+  // 1. Edge cache — serve stale instantly if present.
+  const cached = await readCacheEntry<LinkRow | null>(linkCacheKey);
+  let link: LinkRow | null = cached?.value ?? null;
+  let cacheStatus: "HIT" | "STALE" | "MISS" = "MISS";
+  let revalidate = false;
 
-  // 2. Fall back to Supabase on miss.
-  if (!cacheHit) {
-    const { data } = await supabaseAdmin
-      .from("links")
-      .select(
-        "id, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index, owner_only, owner_ips",
-      )
-      .eq("slug", slug)
-      .maybeSingle();
-    link = (data as CachedLink) ?? null;
-    // Cache both hits and misses (short TTL) to absorb bursts of bad traffic.
-    void waitUntilSafe(writeCachedJSON(linkCacheKey, link));
+  if (cached) {
+    const age = (Date.now() - cached.storedAt) / 1000;
+    if (age <= CACHE_TTL_SECONDS) {
+      cacheStatus = "HIT";
+    } else {
+      cacheStatus = "STALE";
+      revalidate = true;
+    }
+  }
+
+  // 2. Cache miss → blocking fetch. Stale → background revalidate.
+  if (!cached) {
+    link = await fetchLink(slug);
+    scheduleBackground(writeCacheEntry(linkCacheKey, link));
+  } else if (revalidate) {
+    scheduleBackground(
+      (async () => {
+        const fresh = await fetchLink(slug);
+        await writeCacheEntry(linkCacheKey, fresh);
+      })(),
+    );
   }
 
   if (!link) {
     return Response.redirect(FALLBACK, 302);
   }
 
-  // 3. Default waiting URL — also cached.
+  // 3. Default waiting URL — only needed for waiting/limit modes.
   let defaultWaiting: string | null = null;
   if (
     link.mode === "waiting" ||
     (link.click_limit !== null && link.click_count >= link.click_limit)
   ) {
-    const cachedSettings = await readCachedJSON<{ url: string | null }>(
-      SETTINGS_CACHE_KEY,
-    );
+    const cachedSettings = await readCacheEntry<string | null>(SETTINGS_CACHE_KEY);
     if (cachedSettings) {
-      defaultWaiting = cachedSettings.url;
+      defaultWaiting = cachedSettings.value;
+      const age = (Date.now() - cachedSettings.storedAt) / 1000;
+      if (age > CACHE_TTL_SECONDS) {
+        scheduleBackground(
+          (async () => {
+            const fresh = await fetchDefaultWaiting();
+            await writeCacheEntry(SETTINGS_CACHE_KEY, fresh);
+          })(),
+        );
+      }
     } else {
-      const { data: settings } = await supabaseAdmin
-        .from("settings")
-        .select("default_waiting_url")
-        .limit(1)
-        .maybeSingle();
-      defaultWaiting = settings?.default_waiting_url ?? null;
-      void waitUntilSafe(
-        writeCachedJSON(SETTINGS_CACHE_KEY, { url: defaultWaiting }),
-      );
+      defaultWaiting = await fetchDefaultWaiting();
+      scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, defaultWaiting));
     }
   }
 
   const ua = request.headers.get("user-agent") || "";
   const isBot = BOT_REGEX.test(ua);
   const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
     request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
     "";
   const country = request.headers.get("cf-ipcountry") || null;
   const device = /mobile|android|iphone|ipad|ipod/i.test(ua)
     ? "mobile"
     : "desktop";
 
-  // Prefetch / link-preview detection. Browsers (Chrome, Safari) and
-  // messaging apps (WhatsApp, Telegram, Slack, Discord, iMessage) fetch
-  // URLs to render previews — these are NOT real clicks.
+  // Prefetch / link-preview detection.
   const purpose =
     request.headers.get("purpose") ||
     request.headers.get("x-purpose") ||
@@ -243,14 +278,11 @@ export async function handleRedirect(
   const isPrefetch =
     /prefetch|preview|prerender/i.test(purpose) ||
     request.headers.get("x-moz") === "prefetch" ||
-    request.headers.get("sec-fetch-dest") === "empty" &&
+    (request.headers.get("sec-fetch-dest") === "empty" &&
       request.headers.get("sec-fetch-mode") === "no-cors" &&
-      request.headers.get("sec-fetch-site") === "none";
+      request.headers.get("sec-fetch-site") === "none");
 
-  // cf-ray dedup happens INSIDE the tracking promise (off the hot path) so
-  // the redirect response is not blocked by an edge cache lookup.
   const cfRay = request.headers.get("cf-ray") || "";
-
   const skipTracking = isBot || isPrefetch;
 
   const { url: destination, mode: modeAtClick } = pickDestination(
@@ -260,114 +292,69 @@ export async function handleRedirect(
     ip,
   );
 
-  // Measure end-to-end handler time so we can store it on the click row
-  // and update the link's running average. Captured BEFORE the response
-  // is built so it reflects the actual redirect latency.
   const redirectMs = Date.now() - startTime;
 
-  // Skip tracking entirely for bots, prefetch/preview requests, and
-  // duplicate (cf-ray) hits — these inflate counts and don't represent
-  // real user clicks.
-  if (skipTracking) {
-    console.log(
-      `[redirect] tracking skipped link_id=${link.id} slug=${slug} reason=${
-        isBot ? "bot" : isPrefetch ? "prefetch" : "duplicate"
-      }`,
-    );
-  } else {
-    // Fire-and-forget tracking. Each write is independent (Promise.allSettled),
-    // so a failure in one step (e.g. metrics RPC) cannot roll back the others.
-    console.log(
-      `[redirect] tracking start link_id=${link.id} slug=${slug} mode=${modeAtClick} ms=${redirectMs}`,
-    );
+  // 4. Build and return response IMMEDIATELY. All writes go to background.
+  const response = new Response(null, {
+    status: 302,
+    headers: {
+      Location: destination,
+      "Cache-Control": "no-store",
+      "X-Cache": cacheStatus,
+      "Server-Timing": `redirect;dur=${redirectMs}`,
+    },
+  });
 
-    const trackStep = async <T,>(label: string, p: PromiseLike<T>): Promise<T | null> => {
-      try {
-        const res: any = await p;
-        if (res?.error) {
-          console.error(`[redirect] ${label} ERROR`, JSON.stringify(res.error));
-        } else {
-          console.log(`[redirect] ${label} OK`);
-        }
-        return res;
-      } catch (e: any) {
-        console.error(
-          `[redirect] ${label} FAILED`,
-          JSON.stringify({ message: e?.message, name: e?.name, stack: e?.stack, raw: e }),
-        );
-        return null;
-      }
-    };
+  if (!skipTracking) {
+    const linkId = link.id;
+    const utmSource = url.searchParams.get("utm_source");
+    const utmMedium = url.searchParams.get("utm_medium");
+    const utmCampaign = url.searchParams.get("utm_campaign");
 
-    const trackingPromise = (async () => {
-      // cf-ray dedup happens here (off the hot path). If we've seen this
-      // ray already, skip the writes — it's a Cloudflare retry, not a click.
-      if (cfRay) {
-        const cache = getEdgeCache();
-        if (cache) {
-          try {
-            const rayKey = new Request(`https://cache.internal/ray/${cfRay}`);
-            const hit = await cache.match(rayKey);
-            if (hit) {
-              console.log(`[redirect] tracking skipped reason=duplicate ray=${cfRay}`);
-              return;
+    scheduleBackground(
+      (async () => {
+        // cf-ray dedup off the hot path
+        if (cfRay) {
+          const cache = getEdgeCache();
+          if (cache) {
+            try {
+              const rayKey = new Request(`https://cache.internal/ray/${cfRay}`);
+              const hit = await cache.match(rayKey);
+              if (hit) return;
+              await cache.put(
+                rayKey,
+                new Response("1", {
+                  headers: { "Cache-Control": "public, max-age=60" },
+                }),
+              );
+            } catch {
+              /* ignore */
             }
-            await cache.put(
-              rayKey,
-              new Response("1", {
-                headers: { "Cache-Control": "public, max-age=60" },
-              }),
-            );
-          } catch {
-            /* ignore */
           }
         }
-      }
 
-      const results = await Promise.allSettled([
-        trackStep(
-          "increment_link_click",
-          supabaseAdmin.rpc("increment_link_click", { _link_id: link!.id }),
-        ),
-        trackStep(
-          "record_redirect_metrics",
+        await Promise.allSettled([
+          supabaseAdmin.rpc("increment_link_click", { _link_id: linkId }),
           supabaseAdmin.rpc("record_redirect_metrics", {
-            _link_id: link!.id,
+            _link_id: linkId,
             _ms: redirectMs,
           }),
-        ),
-        trackStep(
-          "clicks.insert",
           supabaseAdmin.from("clicks").insert({
-            link_id: link!.id,
+            link_id: linkId,
             mode_at_click: modeAtClick,
             ip: ip || null,
             country,
             device,
             is_vpn: false,
             redirect_ms: redirectMs,
-            utm_source: url.searchParams.get("utm_source"),
-            utm_medium: url.searchParams.get("utm_medium"),
-            utm_campaign: url.searchParams.get("utm_campaign"),
+            utm_source: utmSource,
+            utm_medium: utmMedium,
+            utm_campaign: utmCampaign,
           }),
-        ),
-      ]);
-      console.log(
-        `[redirect] tracking done`,
-        results.map((r) => r.status).join(","),
-      );
-    })();
-
-    void waitUntilSafe(trackingPromise);
+        ]);
+      })(),
+    );
   }
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: destination,
-      "Cache-Control": "no-store",
-      "X-Cache": cacheHit ? "HIT" : "MISS",
-      "Server-Timing": `redirect;dur=${redirectMs}`,
-    },
-  });
+  return response;
 }
