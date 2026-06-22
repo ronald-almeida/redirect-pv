@@ -238,10 +238,18 @@ export async function handleRedirect(
     }
   }
 
-  // 2. Cache miss → blocking fetch. Stale → background revalidate.
+  // 2. Cache miss → fetch link AND settings in parallel (saves a round-trip
+  //    when the mode ends up being `waiting` or hits a click limit).
+  let defaultWaitingPromise: Promise<string | null> | null = null;
   if (!cached) {
-    link = await fetchLink(slug);
+    const [linkRes, waitingRes] = await Promise.all([
+      fetchLink(slug),
+      fetchDefaultWaiting(),
+    ]);
+    link = linkRes;
+    defaultWaitingPromise = Promise.resolve(waitingRes);
     scheduleBackground(writeCacheEntry(linkCacheKey, link));
+    scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, waitingRes));
   } else if (revalidate) {
     scheduleBackground(
       (async () => {
