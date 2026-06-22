@@ -1216,12 +1216,12 @@ function DateRangeBar({
     return "—";
   })();
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <span className="text-xs uppercase tracking-wide text-muted-foreground">
           Período
         </span>
-        <div className="inline-flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1">
           {presets.map((p) => {
             const active = preset === p.id;
             return (
@@ -1229,7 +1229,7 @@ function DateRangeBar({
                 key={p.id}
                 type="button"
                 onClick={() => onPreset(p.id)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors sm:px-3 sm:text-xs ${
                   active
                     ? "bg-primary text-primary-foreground"
                     : "border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -1257,7 +1257,7 @@ function DateRangeBar({
             />
           </div>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">{summary}</span>
+        <span className="text-xs text-muted-foreground sm:ml-auto">{summary}</span>
       </div>
     </div>
   );
