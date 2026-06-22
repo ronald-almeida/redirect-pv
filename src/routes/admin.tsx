@@ -539,22 +539,22 @@ function AdminPage() {
 
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:space-y-5 sm:px-6 sm:py-8">
         {/* Global settings collapsible */}
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <button
             type="button"
             onClick={() => setSettingsOpen((o) => !o)}
-            className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-secondary/40"
+            className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-secondary/40 sm:px-5 sm:py-3.5"
           >
-            <div className="flex items-center gap-2.5">
-              <Settings2 className="h-4 w-4 text-muted-foreground" />
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
               <span className="text-sm font-medium">Configurações Globais</span>
             </div>
             <ChevronDown
-              className={`h-4 w-4 text-muted-foreground transition-transform ${settingsOpen ? "rotate-180" : ""}`}
+              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${settingsOpen ? "rotate-180" : ""}`}
             />
           </button>
           {settingsOpen && (
-            <div className="border-t border-border px-5 py-4 animate-fade-in">
+            <div className="border-t border-border px-4 py-4 animate-fade-in sm:px-5">
               <Label
                 htmlFor="default-waiting-url"
                 className="mb-1.5 block text-xs text-muted-foreground"
@@ -579,6 +579,7 @@ function AdminPage() {
             </div>
           )}
         </div>
+
 
         {/* Date range filter */}
         <DateRangeBar
