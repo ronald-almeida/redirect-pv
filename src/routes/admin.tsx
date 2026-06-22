@@ -489,9 +489,9 @@ function AdminPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-3.5">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-8">
+            <div className="flex shrink-0 items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/15 text-primary">
                 <Shield className="h-4 w-4" />
               </div>
@@ -499,22 +499,23 @@ function AdminPage() {
                 CloakPanel
               </span>
             </div>
-            <nav className="flex items-center gap-1 text-sm">
+            <nav className="flex items-center gap-1 text-xs sm:text-sm">
               <Link
                 to="/admin"
-                className="rounded-md px-3 py-1.5 font-medium text-foreground bg-secondary"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-foreground bg-secondary sm:px-3"
               >
+                <LinkIcon className="h-3.5 w-3.5 sm:hidden" />
                 Links
               </Link>
               <Link
                 to="/admin/analytics"
-                className="rounded-md px-3 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground sm:px-3"
               >
                 Analytics
               </Link>
               <Link
                 to="/admin/latency"
-                className="rounded-md px-3 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground sm:px-3"
               >
                 Latência
               </Link>
@@ -524,32 +525,33 @@ function AdminPage() {
             variant="ghost"
             size="sm"
             onClick={handleSignOut}
-            className="gap-2"
+            className="gap-2 px-2 sm:px-3"
           >
             <LogOut className="h-4 w-4" />
-            Sair
+            <span className="hidden sm:inline">Sair</span>
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-5 px-6 py-8">
+
+      <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:space-y-5 sm:px-6 sm:py-8">
         {/* Global settings collapsible */}
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <button
             type="button"
             onClick={() => setSettingsOpen((o) => !o)}
-            className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-secondary/40"
+            className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-secondary/40 sm:px-5 sm:py-3.5"
           >
-            <div className="flex items-center gap-2.5">
-              <Settings2 className="h-4 w-4 text-muted-foreground" />
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
               <span className="text-sm font-medium">Configurações Globais</span>
             </div>
             <ChevronDown
-              className={`h-4 w-4 text-muted-foreground transition-transform ${settingsOpen ? "rotate-180" : ""}`}
+              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${settingsOpen ? "rotate-180" : ""}`}
             />
           </button>
           {settingsOpen && (
-            <div className="border-t border-border px-5 py-4 animate-fade-in">
+            <div className="border-t border-border px-4 py-4 animate-fade-in sm:px-5">
               <Label
                 htmlFor="default-waiting-url"
                 className="mb-1.5 block text-xs text-muted-foreground"
@@ -575,6 +577,7 @@ function AdminPage() {
           )}
         </div>
 
+
         {/* Date range filter */}
         <DateRangeBar
           preset={rangePreset}
@@ -596,15 +599,15 @@ function AdminPage() {
               className="bg-card pl-9"
             />
           </div>
-          <form onSubmit={handleCreate} className="flex gap-2">
+          <form onSubmit={handleCreate} className="flex min-w-0 gap-2">
             <Input
               placeholder="novo-slug"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              className="bg-card sm:w-56"
+              className="min-w-0 bg-card sm:w-56"
               required
             />
-            <Button type="submit" className="gap-1.5">
+            <Button type="submit" className="shrink-0 gap-1.5">
               <Plus className="h-4 w-4" />
               Adicionar
             </Button>
@@ -630,105 +633,121 @@ function AdminPage() {
               return (
                 <div
                   key={l.id}
-                  className={`overflow-hidden rounded-xl border bg-card transition-colors ${l.active ? "border-border" : "border-border/60 opacity-70"}`}
+                  className={`group overflow-hidden rounded-xl border bg-card shadow-sm transition-colors ${l.active ? "border-border" : "border-border/60 opacity-70"}`}
                 >
-                  {/* Collapsed header row */}
-                  <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-                    <button
-                      type="button"
-                      onClick={() => setExpanded((p) => ({ ...p, [l.id]: !isOpen }))}
-                      className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
-                      title={isOpen ? "Recolher" : "Expandir"}
-                    >
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                      />
-                    </button>
-
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-base font-semibold leading-tight">
-                          {l.name?.trim() || `/${l.slug}`}
-                        </div>
-                        {l.name?.trim() && (
-                          <div className="truncate font-mono text-xs text-muted-foreground">
-                            /{l.slug}
-                          </div>
-                        )}
-                      </div>
-                      <span
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.activeCls}`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-                        {meta.label}
-                      </span>
-                    </div>
-
-                    <ModePills l={l} onChange={(m) => setMode(l, m)} />
-
-                    <div className="flex items-center gap-2 pl-2">
-                      <span className="text-xs text-muted-foreground">
-                        {l.active ? "Ativo" : "Inativo"}
-                      </span>
-                      <Switch
-                        checked={l.active}
-                        onCheckedChange={(v) => setActive(l, v)}
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <div className="relative flex items-center">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => copyLink(l.slug)}
-                          title="Copiar link"
+                  {/* Card header */}
+                  <div className="px-4 py-3.5 sm:px-5 sm:py-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      {/* Identity */}
+                      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setExpanded((p) => ({ ...p, [l.id]: !isOpen }))}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          title={isOpen ? "Recolher" : "Expandir"}
                         >
-                          {copiedSlug === l.slug ? (
-                            <Check className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                          />
+                        </button>
+                        <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold leading-tight sm:text-base">
+                            {l.name?.trim() || `/${l.slug}`}
+                          </div>
+                          {l.name?.trim() && (
+                            <div className="truncate font-mono text-[11px] text-muted-foreground sm:text-xs">
+                              /{l.slug}
+                            </div>
                           )}
-                        </Button>
-                        {copiedSlug === l.slug && (
-                          <span className="absolute left-full ml-2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs text-background">
-                            Link copiado!
-                          </span>
-                        )}
+                        </div>
+                        <span
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.activeCls}`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+                          {meta.label}
+                        </span>
                       </div>
-                      <Button size="icon" variant="ghost" asChild title="Abrir">
-                        <a href={`/r/${l.slug}`} target="_blank" rel="noreferrer">
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDuplicate(l)}
-                        title="Duplicar"
-                      >
-                        <Files className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => openEdit(l)}
-                        title="Editar página de espera"
-                      >
-                        <Settings2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDelete(l.id)}
-                        title="Remover"
-                        className="text-muted-foreground hover:text-[#ef4444]"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+
+                      {/* Controls */}
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="flex items-center justify-between gap-2 sm:justify-start">
+                          <ModePills l={l} onChange={(m) => setMode(l, m)} />
+                          <div className="flex items-center gap-2 sm:border-l sm:border-border sm:pl-3">
+                            <span className="hidden text-xs text-muted-foreground sm:inline">
+                              {l.active ? "Ativo" : "Inativo"}
+                            </span>
+                            <Switch
+                              checked={l.active}
+                              onCheckedChange={(v) => setActive(l, v)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-1">
+                          <div className="relative flex items-center">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => copyLink(l.slug)}
+                              title="Copiar link"
+                              className="h-9 w-9"
+                            >
+                              {copiedSlug === l.slug ? (
+                                <Check className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                            </Button>
+                            {copiedSlug === l.slug && (
+                              <span className="absolute left-full ml-2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs text-background">
+                                Link copiado!
+                              </span>
+                            )}
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            asChild
+                            title="Abrir"
+                            className="h-9 w-9"
+                          >
+                            <a href={`/r/${l.slug}`} target="_blank" rel="noreferrer">
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDuplicate(l)}
+                            title="Duplicar"
+                            className="h-9 w-9"
+                          >
+                            <Files className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => openEdit(l)}
+                            title="Editar página de espera"
+                            className="h-9 w-9"
+                          >
+                            <Settings2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDelete(l.id)}
+                            title="Remover"
+                            className="h-9 w-9 text-muted-foreground hover:text-[#ef4444]"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </div>
+
 
                   {/* Stats strip (always visible) */}
                   <div className="grid grid-cols-3 gap-px border-t border-border bg-border">
@@ -751,7 +770,7 @@ function AdminPage() {
 
                   {/* Expanded body */}
                   {isOpen && (
-                    <div className="border-t border-border px-5 py-5 animate-fade-in">
+                    <div className="border-t border-border px-4 py-4 animate-fade-in sm:px-5 sm:py-5">
                       <div className="grid gap-5 lg:grid-cols-[1fr_auto]">
                         <div className="space-y-4">
                           <Field label="Nome do link">
@@ -814,9 +833,9 @@ function AdminPage() {
                             />
                           </Field>
 
-                          <div className="rounded-md border border-border bg-background/40 p-3 space-y-3">
+                          <div className="rounded-md border border-border bg-background/40 p-3 space-y-3 sm:p-4">
                             <div className="flex items-center justify-between gap-3">
-                              <div>
+                              <div className="min-w-0">
                                 <div className="text-sm font-medium">Somente eu</div>
                                 <div className="text-xs text-muted-foreground">
                                   Apenas IPs autorizados acessam o link real. Outros vão para a isca.
@@ -894,11 +913,12 @@ function AdminPage() {
                         </div>
 
                         <div className="flex flex-col items-center gap-2 lg:w-44">
-                          <div className="rounded-lg bg-white p-2.5">
+                          <div className="rounded-lg bg-white p-2">
                             <QRCodeSVG
                               value={`${origin}/r/${l.slug}`}
                               size={140}
                               level="M"
+                              className="h-28 w-28 sm:h-36 sm:w-36"
                             />
                           </div>
                           <span className="text-[11px] text-muted-foreground">
@@ -906,6 +926,7 @@ function AdminPage() {
                           </span>
                         </div>
                       </div>
+
 
                       <LinkAnalytics agg={s} />
                     </div>
@@ -992,7 +1013,7 @@ function ModePills({
 }) {
   const current = (l.mode as Mode) ?? "waiting";
   return (
-    <div className="inline-flex rounded-full border border-border bg-background p-0.5">
+    <div className="flex flex-wrap rounded-full border border-border bg-background p-0.5">
       {(["real", "decoy", "waiting"] as Mode[]).map((m) => {
         const active = current === m;
         const meta = MODE_META[m];
@@ -1001,7 +1022,7 @@ function ModePills({
             key={m}
             type="button"
             onClick={() => onChange(m)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+            className={`rounded-full px-2 py-1 text-[11px] font-medium transition-all sm:px-3 sm:text-xs ${
               active
                 ? meta.activeCls
                 : "text-muted-foreground hover:text-foreground"
@@ -1026,12 +1047,12 @@ function StatCell({
 }) {
   const meta = MODE_META[mode];
   return (
-    <div className="bg-card px-4 py-2.5">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+    <div className="bg-card px-2 py-2 sm:px-4 sm:py-2.5">
+      <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground sm:gap-1.5 sm:text-[10px]">
         <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-        {label}
+        <span className="truncate">{label}</span>
       </div>
-      <div className={`mt-0.5 text-lg font-semibold tabular-nums ${meta.text}`}>
+      <div className={`mt-0.5 text-base font-semibold tabular-nums sm:text-lg ${meta.text}`}>
         {value}
       </div>
     </div>
@@ -1086,52 +1107,54 @@ function SpeedMonitor({
 }) {
   const hasData = last > 0;
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-border bg-card/50 px-5 py-2.5 text-xs">
+    <div className="flex flex-col gap-2 border-t border-border bg-card/50 px-4 py-3 text-xs sm:flex-row sm:items-center sm:gap-x-5 sm:px-5 sm:py-2.5">
       <span className="font-semibold" style={{ color: speedColor(last) }}>
         ⚡ Velocidade de Redirect
       </span>
-      <span className="text-muted-foreground">
-        Último:{" "}
-        {hasData ? (
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:flex sm:flex-wrap sm:items-center">
+        <span className="text-muted-foreground">
+          Último:{" "}
+          {hasData ? (
+            <span
+              className="font-semibold tabular-nums"
+              style={{ color: speedColor(last) }}
+            >
+              {last}ms
+            </span>
+          ) : (
+            <span className="italic">Sem dados ainda</span>
+          )}
+        </span>
+        <span className="text-muted-foreground">
+          Média:{" "}
           <span
             className="font-semibold tabular-nums"
-            style={{ color: speedColor(last) }}
+            style={{ color: speedColor(avg) }}
           >
-            {last}ms
+            {avg}ms
           </span>
-        ) : (
-          <span className="italic">Sem dados ainda</span>
-        )}
-      </span>
-      <span className="text-muted-foreground">
-        Média:{" "}
+        </span>
         <span
-          className="font-semibold tabular-nums"
-          style={{ color: speedColor(avg) }}
+          className="col-span-2 text-muted-foreground"
+          title="Cliques contabilizados no período selecionado (real + isca + espera). Bots, prefetch e duplicados são ignorados."
         >
-          {avg}ms
+          Cliques no período ({rangeLabel}):{" "}
+          <span className="font-semibold tabular-nums text-foreground">
+            {total}
+          </span>
         </span>
-      </span>
-      <span
-        className="text-muted-foreground"
-        title="Cliques contabilizados no período selecionado (real + isca + espera). Bots, prefetch e duplicados são ignorados."
-      >
-        Cliques no período ({rangeLabel}):{" "}
-        <span className="font-semibold tabular-nums text-foreground">
-          {total}
+        <span
+          className="col-span-2 text-muted-foreground"
+          title="Total acumulado desde a criação do link (independente do filtro de data)."
+        >
+          Total geral:{" "}
+          <span className="font-semibold tabular-nums text-foreground/80">
+            {totalAllTime}
+          </span>
         </span>
-      </span>
-      <span
-        className="text-muted-foreground"
-        title="Total acumulado desde a criação do link (independente do filtro de data)."
-      >
-        Total geral:{" "}
-        <span className="font-semibold tabular-nums text-foreground/80">
-          {totalAllTime}
-        </span>
-      </span>
+      </div>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="flex items-center gap-1 sm:ml-auto">
         {onRecompute && (
           <button
             type="button"
@@ -1190,12 +1213,12 @@ function DateRangeBar({
     return "—";
   })();
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <span className="text-xs uppercase tracking-wide text-muted-foreground">
           Período
         </span>
-        <div className="inline-flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1">
           {presets.map((p) => {
             const active = preset === p.id;
             return (
@@ -1203,7 +1226,7 @@ function DateRangeBar({
                 key={p.id}
                 type="button"
                 onClick={() => onPreset(p.id)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors sm:px-3 sm:text-xs ${
                   active
                     ? "bg-primary text-primary-foreground"
                     : "border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -1231,7 +1254,7 @@ function DateRangeBar({
             />
           </div>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">{summary}</span>
+        <span className="text-xs text-muted-foreground sm:ml-auto">{summary}</span>
       </div>
     </div>
   );
