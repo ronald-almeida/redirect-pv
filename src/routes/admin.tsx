@@ -691,7 +691,7 @@ function AdminPage() {
                               variant="ghost"
                               onClick={() => copyLink(l.slug)}
                               title="Copiar link"
-                              className="h-8 w-8 sm:h-9 sm:w-9"
+                              className="h-9 w-9"
                             >
                               {copiedSlug === l.slug ? (
                                 <Check className="h-4 w-4 text-green-600" />
@@ -710,7 +710,7 @@ function AdminPage() {
                             variant="ghost"
                             asChild
                             title="Abrir"
-                            className="h-8 w-8 sm:h-9 sm:w-9"
+                            className="h-9 w-9"
                           >
                             <a href={`/r/${l.slug}`} target="_blank" rel="noreferrer">
                               <ExternalLink className="h-4 w-4" />
@@ -721,7 +721,7 @@ function AdminPage() {
                             variant="ghost"
                             onClick={() => handleDuplicate(l)}
                             title="Duplicar"
-                            className="h-8 w-8 sm:h-9 sm:w-9"
+                            className="h-9 w-9"
                           >
                             <Files className="h-4 w-4" />
                           </Button>
@@ -730,7 +730,7 @@ function AdminPage() {
                             variant="ghost"
                             onClick={() => openEdit(l)}
                             title="Editar página de espera"
-                            className="h-8 w-8 sm:h-9 sm:w-9"
+                            className="h-9 w-9"
                           >
                             <Settings2 className="h-4 w-4" />
                           </Button>
@@ -739,7 +739,7 @@ function AdminPage() {
                             variant="ghost"
                             onClick={() => handleDelete(l.id)}
                             title="Remover"
-                            className="h-8 w-8 text-muted-foreground hover:text-[#ef4444] sm:h-9 sm:w-9"
+                            className="h-9 w-9 text-muted-foreground hover:text-[#ef4444]"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
