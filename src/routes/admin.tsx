@@ -505,8 +505,7 @@ function AdminPage() {
                 className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-foreground bg-secondary sm:px-3"
               >
                 <LinkIcon className="h-3.5 w-3.5 sm:hidden" />
-                <span className="hidden sm:inline">Links</span>
-                <span className="sm:hidden">Links</span>
+                Links
               </Link>
               <Link
                 to="/admin/analytics"
