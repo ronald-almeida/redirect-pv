@@ -128,24 +128,45 @@ type LinkRow = {
 };
 
 const LINK_COLUMNS =
-  "id, mode, real_url, decoy_url, active, expires_at, click_limit, click_count, allowed_countries, blocked_ips, real_urls, ab_test, rotation_index, owner_only, owner_ips";
+  "id,mode,real_url,decoy_url,active,expires_at,click_limit,click_count,allowed_countries,blocked_ips,real_urls,ab_test,rotation_index,owner_only,owner_ips";
+
+// Raw PostgREST fetch — bypasses supabase-js overhead on the hot path.
+function pgRest(path: string, init?: RequestInit): Promise<Response> {
+  const url = process.env.SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return fetch(`${url}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      Accept: "application/vnd.pgrst.object+json",
+      ...(init?.headers || {}),
+    },
+  });
+}
 
 async function fetchLink(slug: string): Promise<LinkRow | null> {
-  const { data } = await supabaseAdmin
-    .from("links")
-    .select(LINK_COLUMNS)
-    .eq("slug", slug)
-    .maybeSingle();
-  return (data as LinkRow) ?? null;
+  try {
+    const r = await pgRest(
+      `links?slug=eq.${encodeURIComponent(slug)}&select=${LINK_COLUMNS}&limit=1`,
+    );
+    if (!r.ok) return null;
+    return (await r.json()) as LinkRow;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchDefaultWaiting(): Promise<string | null> {
-  const { data } = await supabaseAdmin
-    .from("settings")
-    .select("default_waiting_url")
-    .limit(1)
-    .maybeSingle();
-  return data?.default_waiting_url ?? null;
+  try {
+    const r = await pgRest(`settings?select=default_waiting_url&limit=1`);
+    if (!r.ok) return null;
+    const data = (await r.json()) as { default_waiting_url: string | null };
+    return data?.default_waiting_url ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function pickDestination(
@@ -217,10 +238,18 @@ export async function handleRedirect(
     }
   }
 
-  // 2. Cache miss → blocking fetch. Stale → background revalidate.
+  // 2. Cache miss → fetch link AND settings in parallel (saves a round-trip
+  //    when the mode ends up being `waiting` or hits a click limit).
+  let defaultWaitingPromise: Promise<string | null> | null = null;
   if (!cached) {
-    link = await fetchLink(slug);
+    const [linkRes, waitingRes] = await Promise.all([
+      fetchLink(slug),
+      fetchDefaultWaiting(),
+    ]);
+    link = linkRes;
+    defaultWaitingPromise = Promise.resolve(waitingRes);
     scheduleBackground(writeCacheEntry(linkCacheKey, link));
+    scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, waitingRes));
   } else if (revalidate) {
     scheduleBackground(
       (async () => {
@@ -240,21 +269,25 @@ export async function handleRedirect(
     link.mode === "waiting" ||
     (link.click_limit !== null && link.click_count >= link.click_limit)
   ) {
-    const cachedSettings = await readCacheEntry<string | null>(SETTINGS_CACHE_KEY);
-    if (cachedSettings) {
-      defaultWaiting = cachedSettings.value;
-      const age = (Date.now() - cachedSettings.storedAt) / 1000;
-      if (age > CACHE_TTL_SECONDS) {
-        scheduleBackground(
-          (async () => {
-            const fresh = await fetchDefaultWaiting();
-            await writeCacheEntry(SETTINGS_CACHE_KEY, fresh);
-          })(),
-        );
-      }
+    if (defaultWaitingPromise) {
+      defaultWaiting = await defaultWaitingPromise;
     } else {
-      defaultWaiting = await fetchDefaultWaiting();
-      scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, defaultWaiting));
+      const cachedSettings = await readCacheEntry<string | null>(SETTINGS_CACHE_KEY);
+      if (cachedSettings) {
+        defaultWaiting = cachedSettings.value;
+        const age = (Date.now() - cachedSettings.storedAt) / 1000;
+        if (age > CACHE_TTL_SECONDS) {
+          scheduleBackground(
+            (async () => {
+              const fresh = await fetchDefaultWaiting();
+              await writeCacheEntry(SETTINGS_CACHE_KEY, fresh);
+            })(),
+          );
+        }
+      } else {
+        defaultWaiting = await fetchDefaultWaiting();
+        scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, defaultWaiting));
+      }
     }
   }
 
