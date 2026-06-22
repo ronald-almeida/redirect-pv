@@ -511,15 +511,13 @@ function AdminPage() {
                 to="/admin/analytics"
                 className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground sm:px-3"
               >
-                <span className="hidden sm:inline">Analytics</span>
-                <span className="sm:hidden">Analytics</span>
+                Analytics
               </Link>
               <Link
                 to="/admin/latency"
                 className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground sm:px-3"
               >
-                <span className="hidden sm:inline">Latência</span>
-                <span className="sm:hidden">Latência</span>
+                Latência
               </Link>
             </nav>
           </div>
