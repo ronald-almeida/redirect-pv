@@ -1016,7 +1016,7 @@ function ModePills({
 }) {
   const current = (l.mode as Mode) ?? "waiting";
   return (
-    <div className="inline-flex rounded-full border border-border bg-background p-0.5">
+    <div className="flex flex-wrap rounded-full border border-border bg-background p-0.5">
       {(["real", "decoy", "waiting"] as Mode[]).map((m) => {
         const active = current === m;
         const meta = MODE_META[m];
@@ -1025,7 +1025,7 @@ function ModePills({
             key={m}
             type="button"
             onClick={() => onChange(m)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+            className={`rounded-full px-2 py-1 text-[11px] font-medium transition-all sm:px-3 sm:text-xs ${
               active
                 ? meta.activeCls
                 : "text-muted-foreground hover:text-foreground"
@@ -1050,12 +1050,12 @@ function StatCell({
 }) {
   const meta = MODE_META[mode];
   return (
-    <div className="bg-card px-4 py-2.5">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+    <div className="bg-card px-2 py-2 sm:px-4 sm:py-2.5">
+      <div className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground sm:gap-1.5 sm:text-[10px]">
         <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-        {label}
+        <span className="truncate">{label}</span>
       </div>
-      <div className={`mt-0.5 text-lg font-semibold tabular-nums ${meta.text}`}>
+      <div className={`mt-0.5 text-base font-semibold tabular-nums sm:text-lg ${meta.text}`}>
         {value}
       </div>
     </div>
@@ -1110,52 +1110,54 @@ function SpeedMonitor({
 }) {
   const hasData = last > 0;
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-border bg-card/50 px-5 py-2.5 text-xs">
+    <div className="flex flex-col gap-2 border-t border-border bg-card/50 px-4 py-3 text-xs sm:flex-row sm:items-center sm:gap-x-5 sm:px-5 sm:py-2.5">
       <span className="font-semibold" style={{ color: speedColor(last) }}>
         ⚡ Velocidade de Redirect
       </span>
-      <span className="text-muted-foreground">
-        Último:{" "}
-        {hasData ? (
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:flex sm:flex-wrap sm:items-center">
+        <span className="text-muted-foreground">
+          Último:{" "}
+          {hasData ? (
+            <span
+              className="font-semibold tabular-nums"
+              style={{ color: speedColor(last) }}
+            >
+              {last}ms
+            </span>
+          ) : (
+            <span className="italic">Sem dados ainda</span>
+          )}
+        </span>
+        <span className="text-muted-foreground">
+          Média:{" "}
           <span
             className="font-semibold tabular-nums"
-            style={{ color: speedColor(last) }}
+            style={{ color: speedColor(avg) }}
           >
-            {last}ms
+            {avg}ms
           </span>
-        ) : (
-          <span className="italic">Sem dados ainda</span>
-        )}
-      </span>
-      <span className="text-muted-foreground">
-        Média:{" "}
+        </span>
         <span
-          className="font-semibold tabular-nums"
-          style={{ color: speedColor(avg) }}
+          className="col-span-2 text-muted-foreground"
+          title="Cliques contabilizados no período selecionado (real + isca + espera). Bots, prefetch e duplicados são ignorados."
         >
-          {avg}ms
+          Cliques no período ({rangeLabel}):{" "}
+          <span className="font-semibold tabular-nums text-foreground">
+            {total}
+          </span>
         </span>
-      </span>
-      <span
-        className="text-muted-foreground"
-        title="Cliques contabilizados no período selecionado (real + isca + espera). Bots, prefetch e duplicados são ignorados."
-      >
-        Cliques no período ({rangeLabel}):{" "}
-        <span className="font-semibold tabular-nums text-foreground">
-          {total}
+        <span
+          className="col-span-2 text-muted-foreground"
+          title="Total acumulado desde a criação do link (independente do filtro de data)."
+        >
+          Total geral:{" "}
+          <span className="font-semibold tabular-nums text-foreground/80">
+            {totalAllTime}
+          </span>
         </span>
-      </span>
-      <span
-        className="text-muted-foreground"
-        title="Total acumulado desde a criação do link (independente do filtro de data)."
-      >
-        Total geral:{" "}
-        <span className="font-semibold tabular-nums text-foreground/80">
-          {totalAllTime}
-        </span>
-      </span>
+      </div>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="flex items-center gap-1 sm:ml-auto">
         {onRecompute && (
           <button
             type="button"
