@@ -512,6 +512,12 @@ function AdminPage() {
               >
                 Analytics
               </Link>
+              <Link
+                to="/admin/latency"
+                className="rounded-md px-3 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                Latência
+              </Link>
             </nav>
           </div>
           <Button
