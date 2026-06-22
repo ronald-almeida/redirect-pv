@@ -269,21 +269,25 @@ export async function handleRedirect(
     link.mode === "waiting" ||
     (link.click_limit !== null && link.click_count >= link.click_limit)
   ) {
-    const cachedSettings = await readCacheEntry<string | null>(SETTINGS_CACHE_KEY);
-    if (cachedSettings) {
-      defaultWaiting = cachedSettings.value;
-      const age = (Date.now() - cachedSettings.storedAt) / 1000;
-      if (age > CACHE_TTL_SECONDS) {
-        scheduleBackground(
-          (async () => {
-            const fresh = await fetchDefaultWaiting();
-            await writeCacheEntry(SETTINGS_CACHE_KEY, fresh);
-          })(),
-        );
-      }
+    if (defaultWaitingPromise) {
+      defaultWaiting = await defaultWaitingPromise;
     } else {
-      defaultWaiting = await fetchDefaultWaiting();
-      scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, defaultWaiting));
+      const cachedSettings = await readCacheEntry<string | null>(SETTINGS_CACHE_KEY);
+      if (cachedSettings) {
+        defaultWaiting = cachedSettings.value;
+        const age = (Date.now() - cachedSettings.storedAt) / 1000;
+        if (age > CACHE_TTL_SECONDS) {
+          scheduleBackground(
+            (async () => {
+              const fresh = await fetchDefaultWaiting();
+              await writeCacheEntry(SETTINGS_CACHE_KEY, fresh);
+            })(),
+          );
+        }
+      } else {
+        defaultWaiting = await fetchDefaultWaiting();
+        scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, defaultWaiting));
+      }
     }
   }
 
