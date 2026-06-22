@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RSlugRouteImport } from './routes/r.$slug'
+import { Route as AdminLatencyRouteImport } from './routes/admin.latency'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 
 const LoginRoute = LoginRouteImport.update({
@@ -35,6 +36,11 @@ const RSlugRoute = RSlugRouteImport.update({
   path: '/r/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminLatencyRoute = AdminLatencyRouteImport.update({
+  id: '/latency',
+  path: '/latency',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/latency': typeof AdminLatencyRoute
   '/r/$slug': typeof RSlugRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/latency': typeof AdminLatencyRoute
   '/r/$slug': typeof RSlugRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,34 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/latency': typeof AdminLatencyRoute
   '/r/$slug': typeof RSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/login' | '/admin/analytics' | '/r/$slug'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/admin/analytics'
+    | '/admin/latency'
+    | '/r/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/login' | '/admin/analytics' | '/r/$slug'
-  id: '__root__' | '/' | '/admin' | '/login' | '/admin/analytics' | '/r/$slug'
+  to:
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/admin/analytics'
+    | '/admin/latency'
+    | '/r/$slug'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/admin/analytics'
+    | '/admin/latency'
+    | '/r/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -108,6 +136,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/latency': {
+      id: '/admin/latency'
+      path: '/latency'
+      fullPath: '/admin/latency'
+      preLoaderRoute: typeof AdminLatencyRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/analytics': {
       id: '/admin/analytics'
       path: '/analytics'
@@ -120,10 +155,12 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
+  AdminLatencyRoute: typeof AdminLatencyRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAnalyticsRoute: AdminAnalyticsRoute,
+  AdminLatencyRoute: AdminLatencyRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
