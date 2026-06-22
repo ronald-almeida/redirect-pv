@@ -489,9 +489,9 @@ function AdminPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-3.5">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-8">
+            <div className="flex shrink-0 items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/15 text-primary">
                 <Shield className="h-4 w-4" />
               </div>
@@ -499,24 +499,28 @@ function AdminPage() {
                 CloakPanel
               </span>
             </div>
-            <nav className="flex items-center gap-1 text-sm">
+            <nav className="flex items-center gap-1 text-xs sm:text-sm">
               <Link
                 to="/admin"
-                className="rounded-md px-3 py-1.5 font-medium text-foreground bg-secondary"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-foreground bg-secondary sm:px-3"
               >
-                Links
+                <LinkIcon className="h-3.5 w-3.5 sm:hidden" />
+                <span className="hidden sm:inline">Links</span>
+                <span className="sm:hidden">Links</span>
               </Link>
               <Link
                 to="/admin/analytics"
-                className="rounded-md px-3 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground sm:px-3"
               >
-                Analytics
+                <span className="hidden sm:inline">Analytics</span>
+                <span className="sm:hidden">Analytics</span>
               </Link>
               <Link
                 to="/admin/latency"
-                className="rounded-md px-3 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground sm:px-3"
               >
-                Latência
+                <span className="hidden sm:inline">Latência</span>
+                <span className="sm:hidden">Latência</span>
               </Link>
             </nav>
           </div>
@@ -524,13 +528,14 @@ function AdminPage() {
             variant="ghost"
             size="sm"
             onClick={handleSignOut}
-            className="gap-2"
+            className="gap-2 px-2 sm:px-3"
           >
             <LogOut className="h-4 w-4" />
-            Sair
+            <span className="hidden sm:inline">Sair</span>
           </Button>
         </div>
       </header>
+
 
       <main className="mx-auto max-w-6xl space-y-5 px-6 py-8">
         {/* Global settings collapsible */}
