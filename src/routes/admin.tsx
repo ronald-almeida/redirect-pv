@@ -773,7 +773,7 @@ function AdminPage() {
 
                   {/* Expanded body */}
                   {isOpen && (
-                    <div className="border-t border-border px-5 py-5 animate-fade-in">
+                    <div className="border-t border-border px-4 py-4 animate-fade-in sm:px-5 sm:py-5">
                       <div className="grid gap-5 lg:grid-cols-[1fr_auto]">
                         <div className="space-y-4">
                           <Field label="Nome do link">
@@ -836,9 +836,9 @@ function AdminPage() {
                             />
                           </Field>
 
-                          <div className="rounded-md border border-border bg-background/40 p-3 space-y-3">
+                          <div className="rounded-md border border-border bg-background/40 p-3 space-y-3 sm:p-4">
                             <div className="flex items-center justify-between gap-3">
-                              <div>
+                              <div className="min-w-0">
                                 <div className="text-sm font-medium">Somente eu</div>
                                 <div className="text-xs text-muted-foreground">
                                   Apenas IPs autorizados acessam o link real. Outros vão para a isca.
@@ -916,11 +916,12 @@ function AdminPage() {
                         </div>
 
                         <div className="flex flex-col items-center gap-2 lg:w-44">
-                          <div className="rounded-lg bg-white p-2.5">
+                          <div className="rounded-lg bg-white p-2">
                             <QRCodeSVG
                               value={`${origin}/r/${l.slug}`}
                               size={140}
                               level="M"
+                              className="h-28 w-28 sm:h-36 sm:w-36"
                             />
                           </div>
                           <span className="text-[11px] text-muted-foreground">
@@ -928,6 +929,7 @@ function AdminPage() {
                           </span>
                         </div>
                       </div>
+
 
                       <LinkAnalytics agg={s} />
                     </div>
