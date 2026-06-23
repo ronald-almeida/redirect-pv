@@ -51,6 +51,30 @@ const SETTINGS_CACHE_KEY = new Request(
   "https://cache.internal/settings/default_waiting",
 );
 
+// ── In-memory isolate cache ────────────────────────────────────────────────
+// Workers isolates stay warm for many requests. Reading from a Map is ~µs vs
+// ~5–20ms for the edge Cache API. This is the single biggest hot-path win.
+type MemEntry<T> = { value: T; storedAt: number };
+const MEM_MAX = 500;
+const memLinks = new Map<string, MemEntry<LinkRow | null>>();
+const memSettings: { current: MemEntry<string | null> | null } = { current: null };
+
+function memGet(slug: string): MemEntry<LinkRow | null> | null {
+  const hit = memLinks.get(slug);
+  if (!hit) return null;
+  // refresh LRU position
+  memLinks.delete(slug);
+  memLinks.set(slug, hit);
+  return hit;
+}
+function memSet(slug: string, value: LinkRow | null) {
+  if (memLinks.size >= MEM_MAX) {
+    const firstKey = memLinks.keys().next().value;
+    if (firstKey !== undefined) memLinks.delete(firstKey);
+  }
+  memLinks.set(slug, { value, storedAt: Date.now() });
+}
+
 function getEdgeCache(): Cache | null {
   try {
     // @ts-ignore - Workers global
