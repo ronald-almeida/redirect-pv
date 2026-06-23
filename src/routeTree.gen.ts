@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as RSlugRouteImport } from './routes/r.$slug'
 import { Route as AdminLatencyRouteImport } from './routes/admin.latency'
+import { Route as AdminEventsRouteImport } from './routes/admin.events'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as ApiPublicHooksWarmupRouteImport } from './routes/api/public/hooks/warmup'
 
@@ -48,6 +49,11 @@ const AdminLatencyRoute = AdminLatencyRouteImport.update({
   path: '/latency',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminEventsRoute = AdminEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/latency': typeof AdminLatencyRoute
   '/r/$slug': typeof RSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/latency': typeof AdminLatencyRoute
   '/r/$slug': typeof RSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/latency': typeof AdminLatencyRoute
   '/r/$slug': typeof RSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/login'
     | '/admin/analytics'
+    | '/admin/events'
     | '/admin/latency'
     | '/r/$slug'
     | '/admin/'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin/analytics'
+    | '/admin/events'
     | '/admin/latency'
     | '/r/$slug'
     | '/admin'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/login'
     | '/admin/analytics'
+    | '/admin/events'
     | '/admin/latency'
     | '/r/$slug'
     | '/admin/'
@@ -173,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLatencyRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/events': {
+      id: '/admin/events'
+      path: '/events'
+      fullPath: '/admin/events'
+      preLoaderRoute: typeof AdminEventsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/analytics': {
       id: '/admin/analytics'
       path: '/analytics'
@@ -192,12 +211,14 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
+  AdminEventsRoute: typeof AdminEventsRoute
   AdminLatencyRoute: typeof AdminLatencyRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAnalyticsRoute: AdminAnalyticsRoute,
+  AdminEventsRoute: AdminEventsRoute,
   AdminLatencyRoute: AdminLatencyRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
