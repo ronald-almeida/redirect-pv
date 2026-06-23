@@ -100,41 +100,46 @@
 }
 
 .dark {
-  --background: #0A0A0A;
-  --foreground: #FAFAFA;
-  --card: #0F0F10;
-  --card-foreground: #FAFAFA;
-  --popover: #131315;
-  --popover-foreground: #FAFAFA;
-  --primary: #FAFAFA;
-  --primary-foreground: #0A0A0A;
-  --secondary: #161618;
-  --secondary-foreground: #FAFAFA;
-  --muted: #131315;
-  --muted-foreground: #8A8A92;
-  --accent: #1A1A1D;
-  --accent-foreground: #FAFAFA;
+  --background: #07090C;
+  --foreground: #F5F7F5;
+  --card: #0E1116;
+  --card-foreground: #F5F7F5;
+  --popover: #11141A;
+  --popover-foreground: #F5F7F5;
+  --primary: #A3E635;
+  --primary-foreground: #0A0F05;
+  --secondary: #151921;
+  --secondary-foreground: #F5F7F5;
+  --muted: #11141A;
+  --muted-foreground: #7E8794;
+  --accent: #A3E635;
+  --accent-foreground: #0A0F05;
   --destructive: #F43F5E;
   --destructive-foreground: #FFFFFF;
-  --success: #34D399;
-  --warning: #FBBF24;
-  --border: #1C1C20;
-  --input: #1C1C20;
-  --ring: #6366F1;
-  --chart-1: #6366F1;
-  --chart-2: #22D3EE;
-  --chart-3: #34D399;
-  --chart-4: #FBBF24;
+  --success: #A3E635;
+  --warning: #F59E0B;
+  --border: #1B2029;
+  --input: #1B2029;
+  --ring: #A3E635;
+  --chart-1: #A3E635;
+  --chart-2: #A78BFA;
+  --chart-3: #F59E0B;
+  --chart-4: #22D3EE;
   --chart-5: #F472B6;
-  --sidebar: #0C0C0E;
-  --sidebar-foreground: #C9C9D1;
-  --sidebar-primary: #FAFAFA;
-  --sidebar-primary-foreground: #0A0A0A;
-  --sidebar-accent: #18181B;
-  --sidebar-accent-foreground: #FAFAFA;
-  --sidebar-border: #1C1C20;
-  --sidebar-ring: #6366F1;
+  --sidebar: #0A0D11;
+  --sidebar-foreground: #B5BDC9;
+  --sidebar-primary: #A3E635;
+  --sidebar-primary-foreground: #0A0F05;
+  --sidebar-accent: #141821;
+  --sidebar-accent-foreground: #F5F7F5;
+  --sidebar-border: #161A22;
+  --sidebar-ring: #A3E635;
 }
+
+@utility glow-green   { box-shadow: 0 0 0 1px rgba(163,230,53,0.25), 0 0 24px -4px rgba(163,230,53,0.45); }
+@utility glow-violet  { box-shadow: 0 0 0 1px rgba(167,139,250,0.25), 0 0 24px -4px rgba(167,139,250,0.45); }
+@utility glow-orange  { box-shadow: 0 0 0 1px rgba(245,158,11,0.25), 0 0 24px -4px rgba(245,158,11,0.45); }
+@utility glow-cyan    { box-shadow: 0 0 0 1px rgba(34,211,238,0.22), 0 0 24px -4px rgba(34,211,238,0.42); }
 
 @layer base {
   * {

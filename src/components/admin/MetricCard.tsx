@@ -7,68 +7,83 @@ interface MetricCardProps {
   delta?: number | null; // percent
   icon: React.ComponentType<{ className?: string }>;
   series?: number[];
-  accent?: "default" | "success" | "warning" | "danger" | "indigo";
+  accent?: "lime" | "violet" | "cyan" | "orange" | "rose";
   suffix?: string;
+  deltaLabel?: string;
 }
 
-const ACCENT: Record<string, { line: string; tint: string; text: string }> = {
-  default: { line: "#A1A1AA", tint: "rgba(161,161,170,0.15)", text: "text-foreground" },
-  success: { line: "#34D399", tint: "rgba(52,211,153,0.18)", text: "text-[--success]" },
-  warning: { line: "#FBBF24", tint: "rgba(251,191,36,0.18)", text: "text-warning" },
-  danger:  { line: "#F43F5E", tint: "rgba(244,63,94,0.18)", text: "text-destructive" },
-  indigo:  { line: "#6366F1", tint: "rgba(99,102,241,0.20)", text: "text-foreground" },
+const ACCENT: Record<NonNullable<MetricCardProps["accent"]>, { line: string; bg: string; text: string; glow: string }> = {
+  lime:   { line: "#A3E635", bg: "rgba(163,230,53,0.12)", text: "text-primary",          glow: "shadow-[0_0_40px_-12px_rgba(163,230,53,0.55)]" },
+  violet: { line: "#A78BFA", bg: "rgba(167,139,250,0.14)", text: "text-[#A78BFA]",        glow: "shadow-[0_0_40px_-12px_rgba(167,139,250,0.55)]" },
+  cyan:   { line: "#22D3EE", bg: "rgba(34,211,238,0.14)",  text: "text-[#22D3EE]",        glow: "shadow-[0_0_40px_-12px_rgba(34,211,238,0.55)]" },
+  orange: { line: "#F59E0B", bg: "rgba(245,158,11,0.14)",  text: "text-[#F59E0B]",        glow: "shadow-[0_0_40px_-12px_rgba(245,158,11,0.55)]" },
+  rose:   { line: "#F43F5E", bg: "rgba(244,63,94,0.14)",   text: "text-destructive",      glow: "shadow-[0_0_40px_-12px_rgba(244,63,94,0.55)]" },
 };
 
-export function MetricCard({ label, value, delta, icon: Icon, series, accent = "default", suffix }: MetricCardProps) {
+export function MetricCard({ label, value, delta, icon: Icon, series, accent = "lime", suffix, deltaLabel = "vs ontem" }: MetricCardProps) {
   const a = ACCENT[accent];
   const deltaPositive = (delta ?? 0) >= 0;
   const data = (series ?? []).map((v, i) => ({ i, v }));
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-border bg-card p-4 transition-colors hover:border-border/80">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          <Icon className="h-3.5 w-3.5" />
+    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 transition-colors hover:border-border/80">
+      {/* subtle radial glow in background */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full opacity-60 blur-3xl"
+        style={{ background: a.bg }}
+      />
+
+      <div className="relative flex items-start justify-between">
+        <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {label}
         </div>
-        {delta !== undefined && delta !== null && (
-          <span className={cn(
-            "rounded-md border px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums",
-            deltaPositive
-              ? "border-[--success]/25 text-[--success] bg-[--success]/8"
-              : "border-destructive/25 text-destructive bg-destructive/8",
-          )}>
-            {deltaPositive ? "+" : ""}{delta.toFixed(1)}%
-          </span>
+        <div
+          className={cn("flex h-10 w-10 items-center justify-center rounded-xl", a.glow)}
+          style={{ background: a.bg, color: a.line }}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+        </div>
+      </div>
+
+      <div className="relative mt-3 flex items-baseline gap-1.5">
+        <span className="text-[34px] font-semibold tracking-tight tabular-nums text-foreground leading-none">
+          {value}
+        </span>
+        {suffix && <span className="text-sm text-muted-foreground">{suffix}</span>}
+      </div>
+
+      <div className="relative mt-3 flex items-end justify-between gap-3">
+        {delta !== undefined && delta !== null ? (
+          <div className="flex items-center gap-1.5 text-[11.5px]">
+            <span className={cn(
+              "rounded-md px-1.5 py-0.5 font-semibold tabular-nums",
+              deltaPositive ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive",
+            )}>
+              {deltaPositive ? "+" : ""}{delta.toFixed(1)}%
+            </span>
+            <span className="text-muted-foreground">{deltaLabel}</span>
+          </div>
+        ) : <span />}
+
+        {data.length > 1 && (
+          <div className="h-10 w-[55%]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                <YAxis hide domain={["dataMin", "dataMax"]} />
+                <Line
+                  type="monotone"
+                  dataKey="v"
+                  stroke={a.line}
+                  strokeWidth={1.75}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
-      <div className="mt-3 flex items-baseline gap-1.5">
-        <span className={cn("text-[28px] font-semibold tracking-tight tabular-nums", a.text)}>{value}</span>
-        {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
-      </div>
-      {data.length > 1 && (
-        <div className="mt-3 h-10 -mx-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
-              <YAxis hide domain={["dataMin", "dataMax"]} />
-              <defs>
-                <linearGradient id={`spark-${accent}`} x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor={a.line} stopOpacity={0.5} />
-                  <stop offset="100%" stopColor={a.line} stopOpacity={1} />
-                </linearGradient>
-              </defs>
-              <Line
-                type="monotone"
-                dataKey="v"
-                stroke={`url(#spark-${accent})`}
-                strokeWidth={1.75}
-                dot={false}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
     </div>
   );
 }
