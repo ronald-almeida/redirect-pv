@@ -75,7 +75,7 @@ function periodToRange(p: AdminPeriod): DateRange {
   const end = new Date();
   const start = new Date(end);
   start.setDate(start.getDate() - 90);
-  return { start, end, label: "90d" } as DateRange;
+  return { start, end, preset: "custom" };
 }
 
 function formatRel(iso: string | null | undefined): string {
