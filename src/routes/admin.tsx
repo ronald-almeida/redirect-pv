@@ -683,7 +683,7 @@ function AdminPage() {
                       </p>
                     </button>
 
-                    <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/5 pt-4">
+                    <div className="mt-4 flex flex-col gap-3 border-t border-white/5 pt-4 sm:flex-row sm:items-center sm:justify-between">
                       <ModePills l={l} onChange={(m) => setMode(l, m)} />
                       <div className="flex items-center gap-0.5">
                         <button
