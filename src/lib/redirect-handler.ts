@@ -65,11 +65,16 @@ function scheduleBackground(p: Promise<unknown>): void {
 const CACHE_TTL_SECONDS = 300; // fresh window — no revalidation
 const CACHE_SWR_SECONDS = 86_400; // stale window — served + revalidated
 
-const cacheKeyForSlug = (slug: string) =>
-  new Request(`https://cache.internal/link/${encodeURIComponent(slug)}`);
-const SETTINGS_CACHE_KEY = new Request(
-  "https://cache.internal/settings/default_waiting",
-);
+// CRITICAL: Cloudflare Workers' caches.default REQUIRES the cache key URL to use
+// a hostname owned by the zone. Synthetic hosts (cache.internal) cause put() to
+// silently no-op — every read becomes MISS forever. Always derive the host from
+// the actual inbound request.
+function cacheKeyForSlug(origin: string, slug: string): Request {
+  return new Request(`${origin}/__cache/link/${encodeURIComponent(slug)}`);
+}
+function settingsCacheKey(origin: string): Request {
+  return new Request(`${origin}/__cache/settings/default_waiting`);
+}
 
 // In-memory isolate cache. A warm isolate holds hundreds of slugs and serves
 // them in microseconds — this is the biggest single perf win.
