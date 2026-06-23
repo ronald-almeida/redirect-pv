@@ -43,8 +43,8 @@ function scheduleBackground(p: Promise<unknown>): void {
 }
 
 // Edge cache. We serve stale entries instantly and revalidate in the background.
-const CACHE_TTL_SECONDS = 300; // fresh window
-const CACHE_SWR_SECONDS = 3600; // entries up to 1h old still get served, then refresh
+const CACHE_TTL_SECONDS = 300; // fresh window (5min) — cache hit, no revalidation
+const CACHE_SWR_SECONDS = 86400; // entries up to 24h old still served; revalidated in background
 const cacheKeyForSlug = (slug: string) =>
   new Request(`https://cache.internal/link/${encodeURIComponent(slug)}`);
 const SETTINGS_CACHE_KEY = new Request(
