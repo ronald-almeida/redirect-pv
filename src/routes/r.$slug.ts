@@ -11,8 +11,8 @@ export const Route = createFileRoute("/r/$slug")({
       // Cache invalidation hook. Called by the admin UI after create/edit/delete
       // to invalidate the edge + isolate cache immediately, without waiting for TTL.
       // No auth here on purpose — it only purges a single slug's cache entry.
-      DELETE: async ({ params }) => {
-        const ok = await purgeSlugCache(params.slug);
+      DELETE: async ({ request, params }) => {
+        const ok = await purgeSlugCache(params.slug, request);
         return new Response(JSON.stringify({ purged: ok }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
