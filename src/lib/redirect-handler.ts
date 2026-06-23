@@ -119,6 +119,7 @@ async function writeCacheEntry(key: Request, value: unknown) {
 }
 
 export async function purgeSlugCache(slug: string): Promise<boolean> {
+  memLinks.delete(slug);
   const cache = getEdgeCache();
   if (!cache) return false;
   try {
