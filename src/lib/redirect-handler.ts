@@ -277,20 +277,12 @@ export async function handleRedirect(
     }
   }
 
-  // 2. Cache miss → fetch link AND settings in parallel (saves a round-trip
-  //    when the mode ends up being `waiting` or hits a click limit).
-  let defaultWaitingPromise: Promise<string | null> | null = null;
+  // 2. Cache miss → fetch ONLY the link. We never await settings on the hot
+  //    path; the waiting URL is fetched lazily and only if link.mode requires it.
   if (cacheStatus === "MISS") {
-    const [linkRes, waitingRes] = await Promise.all([
-      fetchLink(slug),
-      fetchDefaultWaiting(),
-    ]);
-    link = linkRes;
-    defaultWaitingPromise = Promise.resolve(waitingRes);
+    link = await fetchLink(slug);
     memSet(slug, link);
-    memSettings.current = { value: waitingRes, storedAt: Date.now() };
     scheduleBackground(writeCacheEntry(linkCacheKey, link));
-    scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, waitingRes));
   } else if (revalidate) {
     scheduleBackground(
       (async () => {
