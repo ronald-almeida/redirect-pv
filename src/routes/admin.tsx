@@ -1077,6 +1077,9 @@ function KpiCard({ label, value, accent }: { label: string; value: string; accen
       </p>
     </div>
   );
+}
+
+
 
 
 function SpeedMonitor({
