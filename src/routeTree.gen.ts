@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RSlugRouteImport } from './routes/r.$slug'
 import { Route as AdminLatencyRouteImport } from './routes/admin.latency'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
+import { Route as ApiPublicHooksWarmupRouteImport } from './routes/api/public/hooks/warmup'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -46,6 +47,11 @@ const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AdminRoute,
 } as any)
+const ApiPublicHooksWarmupRoute = ApiPublicHooksWarmupRouteImport.update({
+  id: '/api/public/hooks/warmup',
+  path: '/api/public/hooks/warmup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/latency': typeof AdminLatencyRoute
   '/r/$slug': typeof RSlugRoute
+  '/api/public/hooks/warmup': typeof ApiPublicHooksWarmupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/latency': typeof AdminLatencyRoute
   '/r/$slug': typeof RSlugRoute
+  '/api/public/hooks/warmup': typeof ApiPublicHooksWarmupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +79,7 @@ export interface FileRoutesById {
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/latency': typeof AdminLatencyRoute
   '/r/$slug': typeof RSlugRoute
+  '/api/public/hooks/warmup': typeof ApiPublicHooksWarmupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,6 +90,7 @@ export interface FileRouteTypes {
     | '/admin/analytics'
     | '/admin/latency'
     | '/r/$slug'
+    | '/api/public/hooks/warmup'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -89,6 +99,7 @@ export interface FileRouteTypes {
     | '/admin/analytics'
     | '/admin/latency'
     | '/r/$slug'
+    | '/api/public/hooks/warmup'
   id:
     | '__root__'
     | '/'
@@ -97,6 +108,7 @@ export interface FileRouteTypes {
     | '/admin/analytics'
     | '/admin/latency'
     | '/r/$slug'
+    | '/api/public/hooks/warmup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -104,6 +116,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
   RSlugRoute: typeof RSlugRoute
+  ApiPublicHooksWarmupRoute: typeof ApiPublicHooksWarmupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -150,6 +163,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/api/public/hooks/warmup': {
+      id: '/api/public/hooks/warmup'
+      path: '/api/public/hooks/warmup'
+      fullPath: '/api/public/hooks/warmup'
+      preLoaderRoute: typeof ApiPublicHooksWarmupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -170,6 +190,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
   RSlugRoute: RSlugRoute,
+  ApiPublicHooksWarmupRoute: ApiPublicHooksWarmupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
