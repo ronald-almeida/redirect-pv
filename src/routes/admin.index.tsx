@@ -186,14 +186,15 @@ function LinksPage() {
     const buckets = 16;
     const lat = new Array(buckets).fill(0);
     const cnt = new Array(buckets).fill(0);
-    if (range.start && range.end) {
+    if (range.start) {
       const start = range.start.getTime();
-      const span = range.end.getTime() - start;
+      const endT = (range.end ?? new Date()).getTime();
+      const span = endT - start;
       for (const c of clicks as (ClickRow & { redirect_ms?: number | null })[]) {
         const ms = (c as { redirect_ms?: number | null }).redirect_ms;
         if (!ms || !span) continue;
         const t = new Date(c.created_at).getTime();
-        if (t < start || t >= range.end.getTime()) continue;
+        if (t < start || t >= endT) continue;
         const idx = Math.min(buckets - 1, Math.floor(((t - start) / span) * buckets));
         lat[idx] += ms;
         cnt[idx]++;
