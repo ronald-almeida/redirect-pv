@@ -1102,76 +1102,130 @@ function SpeedMonitor({
   onRecompute?: () => void;
 }) {
   const hasData = last > 0;
+  const lastColor = speedColor(last);
+  const avgColor = speedColor(avg);
+
+  const statusLabel = !hasData
+    ? "Aguardando"
+    : last < 500
+      ? "Ótimo"
+      : last <= 1500
+        ? "Normal"
+        : "Lento";
+
   return (
-    <div className="flex flex-col gap-2 border-t border-border bg-card/50 px-4 py-3 text-xs sm:flex-row sm:items-center sm:gap-x-5 sm:px-5 sm:py-2.5">
-      <span className="font-semibold" style={{ color: speedColor(last) }}>
-        ⚡ Velocidade de Redirect
-      </span>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:flex sm:flex-wrap sm:items-center">
-        <span className="text-muted-foreground">
-          Último:{" "}
-          {hasData ? (
-            <span
-              className="font-semibold tabular-nums"
-              style={{ color: speedColor(last) }}
-            >
-              {last}ms
-            </span>
-          ) : (
-            <span className="italic">Sem dados ainda</span>
-          )}
-        </span>
-        <span className="text-muted-foreground">
-          Média:{" "}
+    <div className="border-t border-white/5 bg-[#0F0F0F] px-4 py-4 sm:px-5">
+      {/* Header */}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
           <span
-            className="font-semibold tabular-nums"
-            style={{ color: speedColor(avg) }}
+            className="flex h-7 w-7 items-center justify-center rounded-md border"
+            style={{
+              color: lastColor,
+              borderColor: `${lastColor}33`,
+              backgroundColor: `${lastColor}14`,
+            }}
           >
-            {avg}ms
+            ⚡
           </span>
-        </span>
+          <div className="flex flex-col leading-tight">
+            <span className="font-['Space_Grotesk'] text-[13px] font-semibold text-[#FAFAFA]">
+              Velocidade de Redirect
+            </span>
+            <span className="text-[10px] uppercase tracking-widest text-neutral-500">
+              Monitor em tempo real
+            </span>
+          </div>
+        </div>
+
         <span
-          className="col-span-2 text-muted-foreground"
-          title="Cliques contabilizados no período selecionado (real + isca + espera). Bots, prefetch e duplicados são ignorados."
+          className="rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider tabular-nums"
+          style={{
+            color: lastColor,
+            borderColor: `${lastColor}40`,
+            backgroundColor: `${lastColor}14`,
+          }}
         >
-          Cliques no período ({rangeLabel}):{" "}
-          <span className="font-semibold tabular-nums text-foreground">
-            {total}
-          </span>
-        </span>
-        <span
-          className="col-span-2 text-muted-foreground"
-          title="Total acumulado desde a criação do link (independente do filtro de data)."
-        >
-          Total geral:{" "}
-          <span className="font-semibold tabular-nums text-foreground/80">
-            {totalAllTime}
-          </span>
+          {statusLabel}
         </span>
       </div>
 
-      <div className="flex items-center gap-1 sm:ml-auto">
-        {onRecompute && (
-          <button
-            type="button"
-            onClick={onRecompute}
-            className="rounded border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            title="Recalcular contadores a partir do histórico de cliques"
-          >
-            Recalcular
-          </button>
-        )}
-        {onReset && (
-          <button
-            type="button"
-            onClick={onReset}
-            className="rounded border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-[#ef4444]/10 hover:text-[#ef4444] hover:border-[#ef4444]/40"
-            title="Zerar contadores deste link"
-          >
-            Resetar contadores
-          </button>
-        )}
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <SpeedTile label="Último" valueColor={lastColor}>
+          {hasData ? `${last}ms` : "—"}
+        </SpeedTile>
+        <SpeedTile label="Média" valueColor={avgColor}>
+          {avg ? `${avg}ms` : "—"}
+        </SpeedTile>
+        <SpeedTile
+          label={`Cliques (${rangeLabel})`}
+          title="Cliques contabilizados no período selecionado (real + isca + espera). Bots, prefetch e duplicados são ignorados."
+        >
+          {total}
+        </SpeedTile>
+        <SpeedTile
+          label="Total geral"
+          title="Total acumulado desde a criação do link (independente do filtro de data)."
+        >
+          {totalAllTime}
+        </SpeedTile>
       </div>
+
+      {/* Actions */}
+      {(onRecompute || onReset) && (
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-1.5">
+          {onRecompute && (
+            <button
+              type="button"
+              onClick={onRecompute}
+              className="rounded-md border border-white/10 bg-[#171717] px-2.5 py-1 text-[11px] font-medium text-neutral-400 transition hover:border-white/20 hover:bg-[#1f1f1f] hover:text-[#FAFAFA]"
+              title="Recalcular contadores a partir do histórico de cliques"
+            >
+              ↻ Recalcular
+            </button>
+          )}
+          {onReset && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="rounded-md border border-white/10 bg-[#171717] px-2.5 py-1 text-[11px] font-medium text-neutral-400 transition hover:border-[#ef4444]/40 hover:bg-[#ef4444]/10 hover:text-[#ef4444]"
+              title="Zerar contadores deste link"
+            >
+              Resetar
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SpeedTile({
+  label,
+  children,
+  valueColor,
+  title,
+}: {
+  label: string;
+  children: React.ReactNode;
+  valueColor?: string;
+  title?: string;
+}) {
+  return (
+    <div
+      className="rounded-md border border-white/5 bg-[#171717] px-3 py-2"
+      title={title}
+    >
+      <p className="mb-0.5 truncate text-[10px] uppercase tracking-wider text-neutral-500">
+        {label}
+      </p>
+      <p
+        className="font-['Space_Grotesk'] text-base font-bold tabular-nums sm:text-lg"
+        style={{ color: valueColor ?? "#FAFAFA" }}
+      >
+        {children}
+      </p>
     </div>
   );
 }
