@@ -474,9 +474,19 @@ function AdminPage() {
     );
   }, [links, search]);
 
+  const kpis = useMemo(() => {
+    const totalClicks = Object.values(stats).reduce((acc, s) => acc + (s?.total ?? 0), 0);
+    const activeSlugs = links.filter((l) => l.active).length;
+    const avgs = links
+      .map((l) => l.avg_redirect_ms ?? 0)
+      .filter((n) => n > 0);
+    const avgLatency = avgs.length ? Math.round(avgs.reduce((a, b) => a + b, 0) / avgs.length) : 0;
+    return { totalClicks, activeSlugs, avgLatency };
+  }, [stats, links]);
+
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center bg-[#0A0A0A] text-sm text-neutral-500">
         Carregando…
       </div>
     );
@@ -487,74 +497,80 @@ function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-3.5">
+
+    <div className="min-h-screen bg-[#0A0A0A] text-[#FAFAFA] font-['DM_Sans']">
+      <header className="sticky top-0 z-30 border-b border-white/5 bg-[#0A0A0A]/90 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3 sm:gap-8">
-            <div className="flex shrink-0 items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/15 text-primary">
-                <Shield className="h-4 w-4" />
+            <div className="flex shrink-0 items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-[#A3E635]">
+                <Shield className="h-4 w-4 text-[#0A0A0A]" strokeWidth={2.5} />
               </div>
-              <span className="text-base font-semibold tracking-tight text-primary">
+              <span className="font-['Space_Grotesk'] text-lg font-bold tracking-tight text-[#FAFAFA] sm:text-xl">
                 CloakPanel
               </span>
             </div>
-            <nav className="flex items-center gap-1 text-xs sm:text-sm">
+            <nav className="flex items-center gap-1 text-xs font-medium sm:gap-4 sm:text-sm">
               <Link
                 to="/admin"
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-foreground bg-secondary sm:px-3"
+                className="rounded-md px-2 py-1.5 text-[#A3E635] sm:px-3"
               >
-                <LinkIcon className="h-3.5 w-3.5 sm:hidden" />
                 Links
               </Link>
               <Link
                 to="/admin/analytics"
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground sm:px-3"
+                className="rounded-md px-2 py-1.5 text-neutral-400 transition-colors hover:text-[#A3E635] sm:px-3"
               >
                 Analytics
               </Link>
               <Link
                 to="/admin/latency"
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground sm:px-3"
+                className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-neutral-400 transition-colors hover:text-[#A3E635] sm:px-3"
               >
                 Latência
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#A3E635]" />
               </Link>
             </nav>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
+            type="button"
             onClick={handleSignOut}
-            className="gap-2 px-2 sm:px-3"
+            className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-[#FAFAFA] sm:px-3 sm:text-sm"
           >
             <LogOut className="h-4 w-4" />
             <span className="hidden sm:inline">Sair</span>
-          </Button>
+          </button>
         </div>
       </header>
 
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:space-y-8 sm:px-6 sm:py-10">
+        {/* KPI strip */}
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+          <KpiCard label="Total Clicks" value={kpis.totalClicks.toLocaleString("pt-BR")} />
+          <KpiCard label="Avg Latency" value={`${kpis.avgLatency || 0}ms`} accent />
+          <KpiCard label="Active Slugs" value={String(kpis.activeSlugs)} />
+        </section>
 
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:space-y-5 sm:px-6 sm:py-8">
         {/* Global settings collapsible */}
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-white/5 bg-[#171717]">
           <button
             type="button"
             onClick={() => setSettingsOpen((o) => !o)}
-            className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-secondary/40 sm:px-5 sm:py-3.5"
+            className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-white/[0.02] sm:px-5 sm:py-3.5"
           >
             <div className="flex min-w-0 items-center gap-2.5">
-              <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="text-sm font-medium">Configurações Globais</span>
+              <Settings2 className="h-4 w-4 shrink-0 text-neutral-500" />
+              <span className="text-sm font-medium text-neutral-200">Configurações Globais</span>
             </div>
             <ChevronDown
-              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${settingsOpen ? "rotate-180" : ""}`}
+              className={`h-4 w-4 shrink-0 text-neutral-500 transition-transform ${settingsOpen ? "rotate-180" : ""}`}
             />
           </button>
           {settingsOpen && (
-            <div className="border-t border-border px-4 py-4 animate-fade-in sm:px-5">
+            <div className="border-t border-white/5 px-4 py-4 animate-fade-in sm:px-5">
               <Label
                 htmlFor="default-waiting-url"
-                className="mb-1.5 block text-xs text-muted-foreground"
+                className="mb-1.5 block text-xs uppercase tracking-widest text-neutral-500 font-['Space_Grotesk']"
               >
                 Link padrão de espera
               </Label>
@@ -566,17 +582,14 @@ function AdminPage() {
                 onChange={(e) => setDefaultWaitingUrl(e.target.value)}
                 onBlur={saveSettings}
                 disabled={!settingsId || savingSettings}
-                className="bg-background"
+                className="border-white/10 bg-[#0A0A0A] text-[#FAFAFA] focus-visible:border-[#A3E635] focus-visible:ring-0"
               />
-              <p className="mt-2 text-xs text-muted-foreground">
-                {savingSettings
-                  ? "Salvando…"
-                  : "Salva automaticamente ao clicar fora do campo."}
+              <p className="mt-2 text-xs text-neutral-500">
+                {savingSettings ? "Salvando…" : "Salva automaticamente ao clicar fora do campo."}
               </p>
             </div>
           )}
         </div>
-
 
         {/* Date range filter */}
         <DateRangeBar
@@ -589,14 +602,15 @@ function AdminPage() {
           range={currentRange}
         />
 
+        {/* Action bar */}
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
             <Input
               placeholder="Buscar por nome ou slug…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-card pl-9"
+              className="border-white/10 bg-[#171717] pl-9 text-[#FAFAFA] placeholder:text-neutral-500 focus-visible:border-[#A3E635] focus-visible:ring-0"
             />
           </div>
           <form onSubmit={handleCreate} className="flex min-w-0 gap-2">
@@ -604,159 +618,129 @@ function AdminPage() {
               placeholder="novo-slug"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              className="min-w-0 bg-card sm:w-56"
+              className="min-w-0 border-white/10 bg-[#171717] font-mono text-[#FAFAFA] placeholder:text-neutral-500 focus-visible:border-[#A3E635] focus-visible:ring-0 sm:w-56"
               required
             />
-            <Button type="submit" className="shrink-0 gap-1.5">
-              <Plus className="h-4 w-4" />
-              Adicionar
-            </Button>
+            <button
+              type="submit"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#A3E635] px-4 py-2 text-sm font-bold uppercase tracking-tight text-[#0A0A0A] transition-all hover:brightness-110 font-['Space_Grotesk']"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
+              Novo Link
+            </button>
           </form>
         </div>
 
-        {/* Links list */}
+        {/* Links grid */}
         {loading ? (
-          <p className="text-sm text-muted-foreground">Carregando…</p>
+          <p className="text-sm text-neutral-500">Carregando…</p>
         ) : links.length === 0 ? (
           <EmptyState onCreate={() => document.querySelector<HTMLInputElement>('input[placeholder="novo-slug"]')?.focus()} />
         ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
-            Nenhum link encontrado para “{search}”.
+          <div className="rounded-xl border border-white/5 bg-[#171717] p-10 text-center text-sm text-neutral-500">
+            Nenhum link encontrado para "{search}".
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((l) => {
               const mode = (l.mode as Mode) ?? "waiting";
-              const meta = MODE_META[mode];
               const isOpen = expanded[l.id] ?? false;
               const s = stats[l.id];
               return (
                 <div
                   key={l.id}
-                  className={`group overflow-hidden rounded-xl border bg-card shadow-sm transition-colors ${l.active ? "border-border" : "border-border/60 opacity-70"}`}
+                  className={`group flex flex-col rounded-xl border bg-[#171717] transition-all xl:col-span-${isOpen ? 3 : 1} ${
+                    l.active
+                      ? "border-white/5 hover:border-white/20"
+                      : "border-white/5 opacity-60"
+                  } ${isOpen ? "xl:col-span-3" : ""}`}
                 >
                   {/* Card header */}
-                  <div className="px-4 py-3.5 sm:px-5 sm:py-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      {/* Identity */}
-                      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+                  <div className="p-5">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <span className="rounded bg-neutral-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight text-neutral-300 font-['Space_Grotesk']">
+                        {mode === "real" ? "302 Redirect" : mode === "decoy" ? "Isca" : "Espera"}
+                      </span>
+                      <Switch
+                        checked={l.active}
+                        onCheckedChange={(v) => setActive(l, v)}
+                        className="data-[state=checked]:bg-[#A3E635]"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setExpanded((p) => ({ ...p, [l.id]: !isOpen }))}
+                      className="block w-full text-left"
+                    >
+                      <h3 className="truncate font-['Space_Grotesk'] text-xl font-bold text-[#A3E635]">
+                        /{l.slug}
+                      </h3>
+                      <p className="mt-1 truncate text-xs text-neutral-500">
+                        {l.name?.trim() || l.real_url || `${origin}/r/${l.slug}`}
+                      </p>
+                    </button>
+
+                    <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/5 pt-4">
+                      <ModePills l={l} onChange={(m) => setMode(l, m)} />
+                      <div className="flex items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={() => setExpanded((p) => ({ ...p, [l.id]: !isOpen }))}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-                          title={isOpen ? "Recolher" : "Expandir"}
+                          onClick={() => copyLink(l.slug)}
+                          title="Copiar link"
+                          className="rounded-md p-2 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-[#FAFAFA]"
                         >
-                          <ChevronDown
-                            className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                          />
-                        </button>
-                        <LinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold leading-tight sm:text-base">
-                            {l.name?.trim() || `/${l.slug}`}
-                          </div>
-                          {l.name?.trim() && (
-                            <div className="truncate font-mono text-[11px] text-muted-foreground sm:text-xs">
-                              /{l.slug}
-                            </div>
+                          {copiedSlug === l.slug ? (
+                            <Check className="h-4 w-4 text-[#A3E635]" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
                           )}
-                        </div>
-                        <span
-                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.activeCls}`}
+                        </button>
+                        <a
+                          href={`/r/${l.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Abrir"
+                          className="rounded-md p-2 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-[#FAFAFA]"
                         >
-                          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-                          {meta.label}
-                        </span>
-                      </div>
-
-                      {/* Controls */}
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <div className="flex items-center justify-between gap-2 sm:justify-start">
-                          <ModePills l={l} onChange={(m) => setMode(l, m)} />
-                          <div className="flex items-center gap-2 sm:border-l sm:border-border sm:pl-3">
-                            <span className="hidden text-xs text-muted-foreground sm:inline">
-                              {l.active ? "Ativo" : "Inativo"}
-                            </span>
-                            <Switch
-                              checked={l.active}
-                              onCheckedChange={(v) => setActive(l, v)}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-1">
-                          <div className="relative flex items-center">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => copyLink(l.slug)}
-                              title="Copiar link"
-                              className="h-9 w-9"
-                            >
-                              {copiedSlug === l.slug ? (
-                                <Check className="h-4 w-4 text-green-600" />
-                              ) : (
-                                <Copy className="h-4 w-4" />
-                              )}
-                            </Button>
-                            {copiedSlug === l.slug && (
-                              <span className="absolute left-full ml-2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs text-background">
-                                Link copiado!
-                              </span>
-                            )}
-                          </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            asChild
-                            title="Abrir"
-                            className="h-9 w-9"
-                          >
-                            <a href={`/r/${l.slug}`} target="_blank" rel="noreferrer">
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleDuplicate(l)}
-                            title="Duplicar"
-                            className="h-9 w-9"
-                          >
-                            <Files className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => openEdit(l)}
-                            title="Editar página de espera"
-                            className="h-9 w-9"
-                          >
-                            <Settings2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleDelete(l.id)}
-                            title="Remover"
-                            className="h-9 w-9 text-muted-foreground hover:text-[#ef4444]"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicate(l)}
+                          title="Duplicar"
+                          className="rounded-md p-2 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-[#FAFAFA]"
+                        >
+                          <Files className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(l)}
+                          title="Editar página de espera"
+                          className="rounded-md p-2 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-[#FAFAFA]"
+                        >
+                          <Settings2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(l.id)}
+                          title="Remover"
+                          className="rounded-md p-2 text-neutral-400 transition-colors hover:bg-[#ef4444]/10 hover:text-[#ef4444]"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
 
-
-                  {/* Stats strip (always visible) */}
-                  <div className="grid grid-cols-3 gap-px border-t border-border bg-border">
-                    <StatCell label="Cliques real" value={s?.real ?? 0} mode="real" />
-                    <StatCell label="Cliques isca" value={s?.decoy ?? 0} mode="decoy" />
-                    <StatCell label="Cliques espera" value={s?.waiting ?? 0} mode="waiting" />
+                  {/* Stats strip */}
+                  <div className="grid grid-cols-3 gap-px border-t border-white/5 bg-white/5">
+                    <StatCell label="Real" value={s?.real ?? 0} mode="real" />
+                    <StatCell label="Isca" value={s?.decoy ?? 0} mode="decoy" />
+                    <StatCell label="Espera" value={s?.waiting ?? 0} mode="waiting" />
                   </div>
 
-                  {/* Redirect speed monitor */}
+                  {/* Speed monitor */}
                   <SpeedMonitor
                     last={l.last_redirect_ms ?? 0}
                     avg={l.avg_redirect_ms ?? 0}
@@ -767,44 +751,39 @@ function AdminPage() {
                     onRecompute={() => handleRecomputeCounters(l.id)}
                   />
 
-
                   {/* Expanded body */}
                   {isOpen && (
-                    <div className="border-t border-border px-4 py-4 animate-fade-in sm:px-5 sm:py-5">
+                    <div className="border-t border-white/5 p-5 animate-fade-in">
                       <div className="grid gap-5 lg:grid-cols-[1fr_auto]">
                         <div className="space-y-4">
                           <Field label="Nome do link">
                             <Input
                               placeholder="Nome do link (ex: Oferta Black Friday)"
                               value={l.name ?? ""}
-                              onChange={(e) =>
-                                updateLink(l.id, { name: e.target.value })
-                              }
+                              onChange={(e) => updateLink(l.id, { name: e.target.value })}
                               onBlur={() => persistLink(l)}
-                              className="bg-background"
+                              className="border-white/10 bg-[#0A0A0A] text-[#FAFAFA] focus-visible:border-[#A3E635] focus-visible:ring-0"
                             />
                           </Field>
                           <div className="grid gap-3 sm:grid-cols-2">
                             <Field label="Slug">
                               <Input
                                 value={l.slug}
-                                onChange={(e) =>
-                                  updateLink(l.id, { slug: e.target.value })
-                                }
+                                onChange={(e) => updateLink(l.id, { slug: e.target.value })}
                                 onBlur={() => persistLink(l)}
-                                className="bg-background font-mono"
+                                className="border-white/10 bg-[#0A0A0A] font-mono text-[#FAFAFA] focus-visible:border-[#A3E635] focus-visible:ring-0"
                               />
                             </Field>
                             <Field label="URL completa">
                               <button
                                 type="button"
                                 onClick={() => copyLink(l.slug)}
-                                className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-3 text-sm hover:bg-secondary"
+                                className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-[#0A0A0A] px-3 text-sm transition-colors hover:border-white/20"
                               >
-                                <span className="truncate text-muted-foreground">
+                                <span className="truncate text-neutral-400">
                                   {origin}/r/{l.slug}
                                 </span>
-                                <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <Copy className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
                               </button>
                             </Field>
                           </div>
@@ -813,11 +792,9 @@ function AdminPage() {
                               type="url"
                               placeholder="https://destino-real.com"
                               value={l.real_url ?? ""}
-                              onChange={(e) =>
-                                updateLink(l.id, { real_url: e.target.value })
-                              }
+                              onChange={(e) => updateLink(l.id, { real_url: e.target.value })}
                               onBlur={() => persistLink(l)}
-                              className="bg-background"
+                              className="border-white/10 bg-[#0A0A0A] text-[#FAFAFA] focus-visible:border-[#A3E635] focus-visible:ring-0"
                             />
                           </Field>
                           <Field label="Link isca">
@@ -825,24 +802,23 @@ function AdminPage() {
                               type="url"
                               placeholder="https://site-isca.com"
                               value={l.decoy_url ?? ""}
-                              onChange={(e) =>
-                                updateLink(l.id, { decoy_url: e.target.value })
-                              }
+                              onChange={(e) => updateLink(l.id, { decoy_url: e.target.value })}
                               onBlur={() => persistLink(l)}
-                              className="bg-background"
+                              className="border-white/10 bg-[#0A0A0A] text-[#FAFAFA] focus-visible:border-[#A3E635] focus-visible:ring-0"
                             />
                           </Field>
 
-                          <div className="rounded-md border border-border bg-background/40 p-3 space-y-3 sm:p-4">
+                          <div className="space-y-3 rounded-md border border-white/10 bg-[#0A0A0A] p-3 sm:p-4">
                             <div className="flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="text-sm font-medium">Somente eu</div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="text-sm font-medium text-[#FAFAFA]">Somente eu</div>
+                                <div className="text-xs text-neutral-500">
                                   Apenas IPs autorizados acessam o link real. Outros vão para a isca.
                                 </div>
                               </div>
                               <Switch
                                 checked={!!l.owner_only}
+                                className="data-[state=checked]:bg-[#A3E635]"
                                 onCheckedChange={async (v) => {
                                   updateLink(l.id, { owner_only: v });
                                   const { error } = await supabase
@@ -861,7 +837,7 @@ function AdminPage() {
 
                             {l.owner_only && (
                               <div className="space-y-2">
-                                <Label className="text-xs">Meus IPs autorizados</Label>
+                                <Label className="text-xs text-neutral-400">Meus IPs autorizados</Label>
                                 <Input
                                   placeholder="Ex: 187.45.10.2, 2804:abc::1"
                                   value={(l.owner_ips ?? []).join(", ")}
@@ -874,7 +850,7 @@ function AdminPage() {
                                     })
                                   }
                                   onBlur={() => persistLink(l)}
-                                  className="bg-background font-mono text-xs"
+                                  className="border-white/10 bg-[#171717] font-mono text-xs text-[#FAFAFA] focus-visible:border-[#A3E635] focus-visible:ring-0"
                                 />
                                 <Button
                                   type="button"
@@ -921,12 +897,9 @@ function AdminPage() {
                               className="h-28 w-28 sm:h-36 sm:w-36"
                             />
                           </div>
-                          <span className="text-[11px] text-muted-foreground">
-                            QR do redirect
-                          </span>
+                          <span className="text-[11px] text-neutral-500">QR do redirect</span>
                         </div>
                       </div>
-
 
                       <LinkAnalytics agg={s} />
                     </div>
@@ -937,6 +910,7 @@ function AdminPage() {
           </div>
         )}
       </main>
+
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
@@ -1087,6 +1061,26 @@ function speedColor(ms: number): string {
   if (ms <= 1500) return "#eab308";
   return "#ef4444";
 }
+
+function KpiCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="rounded-lg border border-white/5 bg-[#171717] p-5">
+      <p className="mb-1 text-xs uppercase tracking-widest text-neutral-500 font-['Space_Grotesk']">
+        {label}
+      </p>
+      <p
+        className={`font-['Space_Grotesk'] text-3xl font-bold tabular-nums ${
+          accent ? "text-[#A3E635]" : "text-[#FAFAFA]"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+
+
 
 function SpeedMonitor({
   last,
