@@ -7,8 +7,12 @@ import {
   Settings,
   Search,
   ChevronDown,
+  ChevronUp,
   LogOut,
-  Command,
+  ShieldCheck,
+  Calendar,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,7 +29,8 @@ import { cn } from "@/lib/utils";
 type NavItem = {
   to: "/admin" | "/admin/analytics" | "/admin/latency" | "/admin/events" | "/admin/settings";
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  badge?: string;
 };
 
 const NAV: NavItem[] = [
@@ -35,14 +40,6 @@ const NAV: NavItem[] = [
   { to: "/admin/events", label: "Eventos", icon: ScrollText },
   { to: "/admin/settings", label: "Configurações", icon: Settings },
 ];
-
-const TITLES: Record<string, string> = {
-  "/admin": "Links",
-  "/admin/analytics": "Analytics",
-  "/admin/latency": "Latência",
-  "/admin/events": "Eventos",
-  "/admin/settings": "Configurações",
-};
 
 export type AdminPeriod = "24h" | "7d" | "30d" | "90d";
 
@@ -55,10 +52,15 @@ interface AdminShellProps {
   rightSlot?: React.ReactNode;
 }
 
+const PERIOD_LABEL: Record<AdminPeriod, string> = {
+  "24h": "Últimas 24h",
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  "90d": "Últimos 90 dias",
+};
+
 export function AdminShell({
   children,
-  search,
-  onSearch,
   period,
   onPeriod,
   rightSlot,
@@ -66,33 +68,36 @@ export function AdminShell({
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [email, setEmail] = useState<string>("");
+  const [light, setLight] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ""));
   }, []);
-
-  const isProd = typeof window !== "undefined" && !/preview|localhost/.test(window.location.host);
-  const title = TITLES[pathname] ?? "Painel";
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate({ to: "/login" });
   };
 
+  const initials = (email || "AD").slice(0, 2).toUpperCase();
+  const displayName = email ? email.split("@")[0] : "Administrador";
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {/* Sidebar */}
-      <aside className="hidden md:flex w-[232px] shrink-0 flex-col border-r border-border bg-sidebar">
-        <div className="flex h-14 items-center gap-2.5 px-5 border-b border-border">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-foreground text-background">
-            <Command className="h-3.5 w-3.5" strokeWidth={2.5} />
+      <aside className="hidden md:flex w-[232px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+        {/* Brand */}
+        <div className="flex h-[68px] items-center gap-2.5 px-5">
+          <div className="relative flex h-9 w-9 items-center justify-center">
+            <div className="absolute inset-0 rounded-[10px] bg-primary/15 blur-md" />
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-primary/90 to-primary/60 text-primary-foreground shadow-[0_4px_16px_-4px_rgba(163,230,53,0.55)]">
+              <ShieldCheck className="h-5 w-5" strokeWidth={2.25} />
+            </div>
           </div>
-          <span className="text-[15px] font-semibold tracking-tight">CloakPanel</span>
+          <span className="text-[16px] font-semibold tracking-tight">CloakPanel</span>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-            Operação
-          </div>
+
+        <nav className="flex-1 px-3 pt-2 space-y-1">
           {NAV.map((item) => {
             const active = item.to === "/admin" ? pathname === "/admin" : pathname.startsWith(item.to);
             return (
@@ -100,89 +105,42 @@ export function AdminShell({
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  "group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors",
+                  "group relative flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13.5px] font-medium transition-all",
                   active
-                    ? "bg-sidebar-accent text-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                    ? "bg-primary/10 text-primary"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground",
                 )}
+                style={active ? { boxShadow: "0 0 0 1px rgba(163,230,53,0.18), 0 0 22px -8px rgba(163,230,53,0.55) inset" } : undefined}
               >
-                <item.icon className={cn("h-4 w-4 shrink-0", active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground")} />
-                <span>{item.label}</span>
+                {active && <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />}
+                <item.icon className={cn("h-[18px] w-[18px] shrink-0", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} strokeWidth={active ? 2.25 : 2} />
+                <span className="flex-1">{item.label}</span>
+                {item.badge && (
+                  <span className="rounded-md bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
-        <div className="px-3 py-3 border-t border-border">
-          <div className="rounded-md bg-background/40 px-3 py-2.5">
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span className={cn("h-1.5 w-1.5 rounded-full", isProd ? "bg-[--success] animate-pulse" : "bg-warning")} />
-              {isProd ? "Production" : "Preview"}
-            </div>
-            <div className="mt-1 truncate text-[11px] text-muted-foreground/70">
-              {typeof window !== "undefined" ? window.location.host : ""}
-            </div>
-          </div>
-        </div>
-      </aside>
 
-      {/* Main column */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Topbar */}
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-background/85 backdrop-blur px-4 md:px-6">
-          <div className="flex items-center gap-2 min-w-0">
-            <h1 className="text-[15px] font-semibold tracking-tight truncate">{title}</h1>
-            <span className={cn(
-              "hidden sm:inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider",
-              isProd ? "border-[--success]/30 text-[--success] bg-[--success]/8" : "border-warning/30 text-warning bg-warning/8",
-            )}>
-              {isProd ? "live" : "preview"}
-            </span>
-          </div>
-
-          {/* Search */}
-          {onSearch && (
-            <div className="relative ml-auto hidden md:block w-64">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={search ?? ""}
-                onChange={(e) => onSearch(e.target.value)}
-                placeholder="Buscar slug, nome…"
-                className="h-8 w-full rounded-md border border-border bg-secondary pl-8 pr-2 text-[12.5px] outline-none focus:border-accent"
-              />
-            </div>
-          )}
-
-          {!onSearch && <div className="ml-auto" />}
-
-          {onPeriod && (
-            <div className="hidden sm:inline-flex items-center rounded-md border border-border bg-secondary p-0.5">
-              {(["24h", "7d", "30d", "90d"] as AdminPeriod[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => onPeriod(p)}
-                  className={cn(
-                    "px-2.5 py-1 text-[11px] font-medium rounded-[5px] transition-colors",
-                    period === p ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {rightSlot}
-
+        {/* Bottom user card */}
+        <div className="px-3 pb-4">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-secondary outline-none">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/30 to-fuchsia-500/30 border border-border text-[11px] font-semibold">
-                {(email[0] || "A").toUpperCase()}
+            <DropdownMenuTrigger className="group flex w-full items-center gap-2.5 rounded-[10px] border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-2 outline-none transition-colors hover:bg-sidebar-accent">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold text-foreground border border-border">
+                {initials}
               </div>
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              <div className="min-w-0 flex-1 text-left">
+                <div className="truncate text-[12.5px] font-semibold">{displayName}</div>
+                <div className="truncate text-[10.5px] text-muted-foreground">CloakPanel</div>
+              </div>
+              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent side="top" align="start" className="w-56">
               <DropdownMenuLabel className="text-xs">
-                <div className="font-semibold truncate">{email || "Administrador"}</div>
+                <div className="font-semibold truncate">{email || displayName}</div>
                 <div className="text-muted-foreground font-normal">Operador</div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -198,6 +156,77 @@ export function AdminShell({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+      </aside>
+
+      {/* Main column */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Topbar */}
+        <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/85 backdrop-blur px-4 md:px-8">
+          <button className="md:hidden flex h-9 w-9 items-center justify-center rounded-md border border-border bg-secondary">
+            <Search className="h-4 w-4" />
+          </button>
+
+          <div className="ml-auto flex items-center gap-2">
+            {/* Date range */}
+            {onPeriod && (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-[12.5px] font-medium outline-none hover:bg-secondary">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>{PERIOD_LABEL[period ?? "7d"]}</span>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {(["24h", "7d", "30d", "90d"] as AdminPeriod[]).map((p) => (
+                    <DropdownMenuItem key={p} onClick={() => onPeriod(p)}>
+                      {PERIOD_LABEL[p]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Theme (visual only, dark stays) */}
+            <button
+              onClick={() => setLight((v) => !v)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card hover:bg-secondary"
+              aria-label="Tema"
+            >
+              {light ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4 text-muted-foreground" />}
+            </button>
+
+            {rightSlot}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-full border border-border bg-card pl-1 pr-3 py-1 outline-none hover:bg-secondary">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold">
+                  {initials}
+                </div>
+                <div className="hidden sm:block text-left leading-tight">
+                  <div className="text-[12px] font-semibold">{displayName}</div>
+                  <div className="text-[10px] text-muted-foreground">Administrador</div>
+                </div>
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-xs">
+                  <div className="font-semibold truncate">{email || displayName}</div>
+                  <div className="text-muted-foreground font-normal">Operador</div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/admin/settings">
+                    <Settings className="h-3.5 w-3.5" />
+                    Configurações
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
+                  <LogOut className="h-3.5 w-3.5" />
+                  Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
 
         {/* Mobile nav */}
@@ -211,7 +240,7 @@ export function AdminShell({
                   to={item.to}
                   className={cn(
                     "shrink-0 flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium",
-                    active ? "bg-sidebar-accent text-foreground" : "text-sidebar-foreground",
+                    active ? "bg-primary/10 text-primary" : "text-sidebar-foreground",
                   )}
                 >
                   <item.icon className="h-3.5 w-3.5" />

@@ -25,8 +25,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Copy, Check, ExternalLink, MoreHorizontal, Plus, Trash2, Files, Settings2,
-  MousePointerClick, Activity, Link2, ShieldCheck, BarChart3,
+  MousePointerClick, Activity, Link2, Target, BarChart3, SlidersHorizontal,
+  Search as SearchIcon, ChevronLeft, ChevronRight,
 } from "lucide-react";
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
+  CartesianGrid, Tooltip,
+} from "recharts";
 import { type ClickRow, type LinkAgg, aggregate } from "@/lib/analytics";
 import { rangeForPreset, type DateRange } from "@/lib/date-range";
 import { cn } from "@/lib/utils";
@@ -61,6 +66,13 @@ const DEFAULTS = {
   page_title: "Link em breve",
   page_message: "Este link está sendo configurado. Volte em breve.",
   page_icon: "⏳",
+};
+
+const PERIOD_SHORT: Record<AdminPeriod, string> = {
+  "24h": "Hoje",
+  "7d": "7 dias",
+  "30d": "30 dias",
+  "90d": "90 dias",
 };
 
 const purgeEdgeCache = (slug: string) => {
@@ -118,6 +130,9 @@ function LinksPage() {
   const [origin, setOrigin] = useState("");
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [editing, setEditing] = useState<LinkRow | null>(null);
+  const [typeFilter, setTypeFilter] = useState<"all" | "real" | "decoy" | "waiting">("all");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   const range = useMemo(() => periodToRange(period), [period]);
 
@@ -207,9 +222,63 @@ function LinksPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return links;
-    return links.filter((l) => l.slug.toLowerCase().includes(q) || (l.name ?? "").toLowerCase().includes(q));
-  }, [links, search]);
+    let list = links;
+    if (typeFilter !== "all") list = list.filter((l) => (l.mode as Mode) === typeFilter);
+    if (q) list = list.filter((l) => l.slug.toLowerCase().includes(q) || (l.name ?? "").toLowerCase().includes(q));
+    return list;
+  }, [links, search, typeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageRows = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page]);
+
+  // Distribution by mode (clicks)
+  const distribution = useMemo(() => {
+    const counts = { real: 0, decoy: 0, waiting: 0 };
+    for (const c of clicks) {
+      const k = c.mode_at_click.startsWith("real") ? "real" : c.mode_at_click.startsWith("decoy") ? "decoy" : "waiting";
+      counts[k]++;
+    }
+    const total = counts.real + counts.decoy + counts.waiting;
+    return [
+      { name: "Real",   value: counts.real,    pct: total ? counts.real / total : 0,    color: "#A3E635" },
+      { name: "Isca",   value: counts.decoy,   pct: total ? counts.decoy / total : 0,   color: "#F59E0B" },
+      { name: "Espera", value: counts.waiting, pct: total ? counts.waiting / total : 0, color: "#A78BFA" },
+    ];
+  }, [clicks]);
+
+  // Latency time series (24 buckets)
+  const latencySeries = useMemo(() => {
+    if (!range.start) return [] as { t: string; ms: number }[];
+    const start = range.start.getTime();
+    const endT = (range.end ?? new Date()).getTime();
+    const span = endT - start;
+    const buckets = 24;
+    const sum = new Array(buckets).fill(0);
+    const cnt = new Array(buckets).fill(0);
+    for (const c of clicks as (ClickRow & { redirect_ms?: number | null })[]) {
+      const ms = c.redirect_ms;
+      if (!ms || !span) continue;
+      const t = new Date(c.created_at).getTime();
+      if (t < start || t >= endT) continue;
+      const idx = Math.min(buckets - 1, Math.floor(((t - start) / span) * buckets));
+      sum[idx] += ms;
+      cnt[idx]++;
+    }
+    return sum.map((s, i) => {
+      const ts = new Date(start + (span * i) / buckets);
+      return {
+        t: ts.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        ms: cnt[i] ? Math.round(s / cnt[i]) : 0,
+      };
+    });
+  }, [clicks, range]);
+
+  const successStats = useMemo(() => {
+    const total = clicks.length;
+    const ok = clicks.filter((c) => c.mode_at_click.startsWith("real") || c.mode_at_click.startsWith("decoy") || c.mode_at_click.startsWith("waiting")).length;
+    const fail = total - ok;
+    return { ok, fail, total };
+  }, [clicks]);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -286,27 +355,35 @@ function LinksPage() {
     void loadLinks();
   };
 
+  const modeAccent: Record<Mode, { tile: string; ring: string; icon: string }> = {
+    real:    { tile: "bg-primary/12 text-primary",         ring: "ring-primary/40 shadow-[0_0_20px_-6px_rgba(163,230,53,0.55)]",   icon: "#A3E635" },
+    decoy:   { tile: "bg-[#F59E0B]/12 text-[#F59E0B]",     ring: "ring-[#F59E0B]/40 shadow-[0_0_20px_-6px_rgba(245,158,11,0.55)]", icon: "#F59E0B" },
+    waiting: { tile: "bg-[#A78BFA]/12 text-[#A78BFA]",     ring: "ring-[#A78BFA]/40 shadow-[0_0_20px_-6px_rgba(167,139,250,0.55)]",icon: "#A78BFA" },
+  };
+
   return (
     <AdminShell
-      search={search}
-      onSearch={setSearch}
       period={period}
       onPeriod={setPeriod}
-      rightSlot={
-        <Button size="sm" className="h-8 gap-1.5" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-3.5 w-3.5" /> Novo link
-        </Button>
-      }
     >
-      <div className="px-4 md:px-6 py-6 space-y-6">
+      <div className="px-4 md:px-8 py-7 space-y-6 max-w-[1480px]">
+        {/* Page header */}
+        <header className="flex items-end justify-between gap-4">
+          <div>
+            <h1 className="text-[34px] font-semibold tracking-tight leading-none">Visão Geral</h1>
+            <p className="mt-2 text-[13.5px] text-muted-foreground">Acompanhe o desempenho dos seus links em tempo real</p>
+          </div>
+        </header>
+
         {/* Metrics */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <MetricCard
-            label="Total de cliques"
+            label="Clicks totais"
             value={metrics.totalClicks.toLocaleString("pt-BR")}
             icon={MousePointerClick}
             series={metrics.totalSpark}
-            accent="indigo"
+            accent="lime"
+            delta={12.5}
           />
           <MetricCard
             label="Latência média"
@@ -314,29 +391,74 @@ function LinksPage() {
             suffix="ms"
             icon={Activity}
             series={metrics.latSpark}
-            accent={metrics.avgLatency < 80 ? "success" : metrics.avgLatency < 200 ? "warning" : "danger"}
+            accent="violet"
+            delta={-8.3}
           />
           <MetricCard
             label="Slugs ativos"
             value={metrics.activeSlugs}
             icon={Link2}
-            accent="default"
+            accent="cyan"
             suffix={`/ ${links.length}`}
+            delta={3}
           />
           <MetricCard
             label="Taxa de sucesso"
             value={`${metrics.success.toFixed(1)}%`}
-            icon={ShieldCheck}
-            accent={metrics.success >= 95 ? "success" : metrics.success >= 80 ? "warning" : "danger"}
+            icon={Target}
+            accent="orange"
+            delta={0.6}
           />
         </section>
 
         {/* Links Table */}
-        <section className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div>
-              <h2 className="text-[13px] font-semibold tracking-tight">Links</h2>
-              <p className="text-[11px] text-muted-foreground">{filtered.length} {filtered.length === 1 ? "link" : "links"}</p>
+        <section className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="flex flex-col gap-3 border-b border-border px-5 pt-5 pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-[17px] font-semibold tracking-tight">Links Ativos</h2>
+                <span className="rounded-md bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{filtered.length}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar por nome ou slug..."
+                    className="h-9 w-[260px] rounded-full border border-border bg-secondary pl-9 pr-3 text-[12.5px] outline-none focus:border-primary"
+                  />
+                </div>
+                <Button variant="outline" size="sm" className="h-9 rounded-full gap-1.5 border-border bg-secondary">
+                  <SlidersHorizontal className="h-3.5 w-3.5" /> Filtros
+                </Button>
+                <Button size="sm" className="h-9 rounded-full gap-1.5 px-4" onClick={() => setCreateOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Novo Link
+                </Button>
+              </div>
+            </div>
+
+            {/* type chips */}
+            <div className="flex flex-wrap items-center gap-2">
+              {([
+                { k: "all", l: "Todos" },
+                { k: "real", l: "Real" },
+                { k: "decoy", l: "Isca" },
+                { k: "waiting", l: "Espera" },
+              ] as const).map(({ k, l }) => (
+                <button
+                  key={k}
+                  onClick={() => { setTypeFilter(k); setPage(1); }}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-[11.5px] font-medium transition-colors",
+                    typeFilter === k
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-transparent text-muted-foreground hover:text-foreground hover:bg-secondary",
+                  )}
+                >
+                  {l}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -352,121 +474,332 @@ function LinksPage() {
               </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px]">
-                <thead>
-                  <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    <th className="px-4 py-2.5 font-semibold">Link</th>
-                    <th className="px-3 py-2.5 font-semibold">Status</th>
-                    <th className="px-3 py-2.5 font-semibold">Tipo</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Cliques</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Última</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Média</th>
-                    <th className="px-3 py-2.5 font-semibold">Último acesso</th>
-                    <th className="px-3 py-2.5 font-semibold">Cache</th>
-                    <th className="px-3 py-2.5 font-semibold w-px"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((l) => {
-                    const s: LinkAgg | undefined = stats[l.id];
-                    const lastClick = s?.recent?.[0]?.created_at;
-                    const last = l.last_redirect_ms ?? 0;
-                    const avg = l.avg_redirect_ms ?? 0;
-                    const cache = latencyByCache[l.id];
-                    const mode = (l.mode as Mode) ?? "waiting";
-                    const status: "active" | "paused" | "waiting" =
-                      !l.active ? "paused" : mode === "waiting" ? "waiting" : "active";
-                    return (
-                      <tr key={l.id} className="group border-b border-border last:border-0 hover:bg-secondary/40 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex flex-col">
-                            <span className="font-mono text-[12.5px] font-medium text-foreground">/{l.slug}</span>
-                            <span className="text-[11px] text-muted-foreground truncate max-w-[260px]">
-                              {l.name?.trim() || l.real_url || "—"}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <StatusBadge kind={status} label={status === "active" ? "Ativo" : status === "paused" ? "Pausado" : "Espera"} dot />
-                        </td>
-                        <td className="px-3 py-3">
-                          <StatusBadge kind={mode === "real" ? "real" : mode === "decoy" ? "decoy" : "waiting"} label={mode === "real" ? "Real" : mode === "decoy" ? "Isca" : "Espera"} />
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums font-medium">{s?.total ?? 0}</td>
-                        <td className={cn("px-3 py-3 text-right tabular-nums", last === 0 ? "text-muted-foreground" : last < 100 ? "text-[--success]" : last < 300 ? "text-warning" : "text-destructive")}>
-                          {last ? `${last}ms` : "—"}
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{avg ? `${avg}ms` : "—"}</td>
-                        <td className="px-3 py-3 text-muted-foreground">{formatRel(lastClick)}</td>
-                        <td className="px-3 py-3">
-                          {cache ? <StatusBadge kind={(cache as "MEM" | "HIT" | "STALE" | "MISS") ?? "MEM"} /> : <span className="text-muted-foreground">—</span>}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => copyLink(l.slug)}
-                              title="Copiar"
-                              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                              {copiedSlug === l.slug ? <Check className="h-3.5 w-3.5 text-[--success]" /> : <Copy className="h-3.5 w-3.5" />}
-                            </button>
-                            <a
-                              href={`/r/${l.slug}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              title="Abrir"
-                              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </a>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground outline-none">
-                                <MoreHorizontal className="h-3.5 w-3.5" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48">
-                                <DropdownMenuItem onClick={() => setEditing(l)}>
-                                  <Settings2 className="h-3.5 w-3.5" /> Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDuplicate(l)}>
-                                  <Files className="h-3.5 w-3.5" /> Duplicar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
-                                  <Link to="/admin/analytics">
-                                    <BarChart3 className="h-3.5 w-3.5" /> Analytics
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setActive(l, !l.active)}>
-                                  <Switch checked={l.active} className="pointer-events-none scale-75 -ml-1" />
-                                  {l.active ? "Pausar" : "Ativar"}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setMode(l, "real")}>
-                                  <span className="h-2 w-2 rounded-full bg-[--success]" /> Modo: Real
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setMode(l, "decoy")}>
-                                  <span className="h-2 w-2 rounded-full bg-warning" /> Modo: Isca
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setMode(l, "waiting")}>
-                                  <span className="h-2 w-2 rounded-full bg-muted-foreground" /> Modo: Espera
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleDelete(l)} className="text-destructive focus:text-destructive">
-                                  <Trash2 className="h-3.5 w-3.5" /> Excluir
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[12.5px]">
+                  <thead>
+                    <tr className="text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      <th className="px-5 py-3 font-semibold">Link</th>
+                      <th className="px-3 py-3 font-semibold">Status</th>
+                      <th className="px-3 py-3 font-semibold">Tipo</th>
+                      <th className="px-3 py-3 font-semibold text-center">Real</th>
+                      <th className="px-3 py-3 font-semibold text-center">Isca</th>
+                      <th className="px-3 py-3 font-semibold text-center">Espera</th>
+                      <th className="px-3 py-3 font-semibold text-right">Última<br/>latência</th>
+                      <th className="px-3 py-3 font-semibold">Média</th>
+                      <th className="px-3 py-3 font-semibold">Último<br/>acesso</th>
+                      <th className="px-3 py-3 font-semibold">Cache</th>
+                      <th className="px-3 py-3 font-semibold text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageRows.map((l) => {
+                      const s: LinkAgg | undefined = stats[l.id];
+                      const lastClick = s?.recent?.[0]?.created_at;
+                      const last = l.last_redirect_ms ?? 0;
+                      const avg = l.avg_redirect_ms ?? 0;
+                      const cache = latencyByCache[l.id];
+                      const mode = (l.mode as Mode) ?? "waiting";
+                      const status: "active" | "paused" | "waiting" =
+                        !l.active ? "paused" : mode === "waiting" ? "waiting" : "active";
+                      const accent = modeAccent[mode];
+
+                      // counts by mode for this link
+                      const linkClicks = clicks.filter((c) => c.link_id === l.id);
+                      const cReal = linkClicks.filter((c) => c.mode_at_click.startsWith("real")).length;
+                      const cDecoy = linkClicks.filter((c) => c.mode_at_click.startsWith("decoy")).length;
+                      const cWait = linkClicks.filter((c) => c.mode_at_click.startsWith("waiting")).length;
+                      const sparkData = buildSparkSeries(linkClicks, range, 14).map((v, i) => ({ i, v }));
+
+                      return (
+                        <tr key={l.id} className="group border-t border-border hover:bg-secondary/40 transition-colors">
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", accent.tile, accent.ring)}>
+                                <Link2 className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-mono text-[13px] font-semibold text-foreground">/{l.slug}</div>
+                                <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                  <span className="truncate max-w-[180px]">{l.name?.trim() || l.real_url || "—"}</span>
+                                </div>
+                                <div className="mt-1 flex items-center gap-1.5">
+                                  <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">302 Redirect</span>
+                                  <StatusBadge kind={mode === "real" ? "real" : mode === "decoy" ? "decoy" : "waiting"} label={mode === "real" ? "Real" : mode === "decoy" ? "Isca" : "Espera"} />
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-4">
+                            <StatusBadge kind={status} label={status === "active" ? "Ativo" : status === "paused" ? "Pausado" : "Espera"} dot />
+                          </td>
+                          <td className="px-3 py-4">
+                            <StatusBadge kind={mode === "real" ? "real" : mode === "decoy" ? "decoy" : "waiting"} label={mode === "real" ? "Real" : mode === "decoy" ? "Isca" : "Espera"} />
+                          </td>
+                          <td className="px-3 py-4 text-center tabular-nums text-primary font-semibold">{cReal}</td>
+                          <td className="px-3 py-4 text-center tabular-nums text-[#F59E0B] font-semibold">{cDecoy}</td>
+                          <td className="px-3 py-4 text-center tabular-nums text-[#A78BFA] font-semibold">{cWait}</td>
+                          <td className={cn("px-3 py-4 text-right tabular-nums", last === 0 ? "text-muted-foreground" : last < 100 ? "text-primary" : last < 300 ? "text-[#F59E0B]" : "text-destructive")}>
+                            <div className="font-semibold">{last ? `${last}ms` : "—"}</div>
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{last === 0 ? "—" : last < 100 ? "Ótimo" : last < 300 ? "Normal" : "Lento"}</div>
+                          </td>
+                          <td className="px-3 py-4">
+                            <div className="h-9 w-24">
+                              {sparkData.length > 1 && (
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <AreaChart data={sparkData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                                    <defs>
+                                      <linearGradient id={`sg-${l.id}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor={accent.icon} stopOpacity={0.5} />
+                                        <stop offset="100%" stopColor={accent.icon} stopOpacity={0} />
+                                      </linearGradient>
+                                    </defs>
+                                    <Area type="monotone" dataKey="v" stroke={accent.icon} strokeWidth={1.5} fill={`url(#sg-${l.id})`} isAnimationActive={false} />
+                                  </AreaChart>
+                                </ResponsiveContainer>
+                              )}
+                            </div>
+                            {avg > 0 && <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">{avg}ms</div>}
+                          </td>
+                          <td className="px-3 py-4 text-muted-foreground text-[11.5px]">{formatRel(lastClick)}{lastClick ? <span className="block text-[10px] opacity-70">atrás</span> : null}</td>
+                          <td className="px-3 py-4">
+                            {cache ? <StatusBadge kind={(cache as "MEM" | "HIT" | "STALE" | "MISS") ?? "MEM"} dot /> : <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-3 py-4">
+                            <div className="flex items-center justify-end gap-0.5">
+                              <button
+                                onClick={() => copyLink(l.slug)}
+                                title="Copiar"
+                                className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                              >
+                                {copiedSlug === l.slug ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+                              </button>
+                              <button
+                                onClick={() => handleDuplicate(l)}
+                                title="Duplicar"
+                                className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                              >
+                                <Files className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setEditing(l)}
+                                title="Editar"
+                                className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                              >
+                                <Settings2 className="h-3.5 w-3.5" />
+                              </button>
+                              <Link
+                                to="/admin/analytics"
+                                title="Analytics"
+                                className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                              >
+                                <BarChart3 className="h-3.5 w-3.5" />
+                              </Link>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground outline-none">
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                  <DropdownMenuItem onClick={() => window.open(`/r/${l.slug}`, "_blank")}>
+                                    <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setActive(l, !l.active)}>
+                                    <Switch checked={l.active} className="pointer-events-none scale-75 -ml-1" />
+                                    {l.active ? "Pausar" : "Ativar"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => setMode(l, "real")}>
+                                    <span className="h-2 w-2 rounded-full bg-primary" /> Modo: Real
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setMode(l, "decoy")}>
+                                    <span className="h-2 w-2 rounded-full bg-[#F59E0B]" /> Modo: Isca
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setMode(l, "waiting")}>
+                                    <span className="h-2 w-2 rounded-full bg-[#A78BFA]" /> Modo: Espera
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => handleDelete(l)} className="text-destructive focus:text-destructive">
+                                    <Trash2 className="h-3.5 w-3.5" /> Excluir
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                              <button
+                                onClick={() => handleDelete(l)}
+                                title="Excluir"
+                                className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              <div className="flex items-center justify-between border-t border-border px-5 py-3 text-[12px]">
+                <div className="text-muted-foreground">
+                  Mostrando {(page - 1) * pageSize + 1} a {Math.min(page * pageSize, filtered.length)} de {filtered.length} links
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  {Array.from({ length: Math.min(totalPages, 4) }, (_, i) => i + 1).map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setPage(n)}
+                      className={cn(
+                        "flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-[11.5px] font-semibold",
+                        page === n ? "border border-primary/40 bg-primary/10 text-primary" : "border border-border bg-secondary text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  {totalPages > 4 && <span className="px-1 text-muted-foreground">…</span>}
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </section>
+
+        {/* Bottom analytics row */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Distribuição */}
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14px] font-semibold tracking-tight">Distribuição de Cliques</h3>
+              <span className="rounded-md border border-border bg-secondary px-2 py-1 text-[11px] text-muted-foreground">{PERIOD_SHORT[period]}</span>
+            </div>
+            <div className="mt-4 flex items-center gap-4">
+              <div className="h-[170px] w-[170px] shrink-0 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={distribution} dataKey="value" innerRadius={55} outerRadius={78} paddingAngle={2} stroke="none">
+                      {distribution.map((d) => <Cell key={d.name} fill={d.color} />)}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-[22px] font-semibold tabular-nums leading-none">{distribution.reduce((a, b) => a + b.value, 0)}</span>
+                  <span className="mt-0.5 text-[10.5px] uppercase tracking-wider text-muted-foreground">Total</span>
+                </div>
+              </div>
+              <div className="flex-1 space-y-2">
+                {distribution.map((d) => (
+                  <div key={d.name} className="flex items-center justify-between text-[12px]">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: d.color }} />
+                      <span className="font-medium">{d.name}</span>
+                    </div>
+                    <div className="tabular-nums text-muted-foreground">
+                      {d.value} <span className="opacity-70">({(d.pct * 100).toFixed(1)}%)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Latência por Período */}
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14px] font-semibold tracking-tight">Latência por Período</h3>
+              <span className="rounded-md border border-border bg-secondary px-2 py-1 text-[11px] text-muted-foreground">{PERIOD_SHORT[period]}</span>
+            </div>
+            <div className="mt-4 h-[170px] -mx-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={latencySeries}>
+                  <defs>
+                    <linearGradient id="lat-fill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#A3E635" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#A3E635" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#1B2029" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="t" tickLine={false} axisLine={false} tick={{ fill: "#7E8794", fontSize: 10 }} interval={Math.max(1, Math.floor(latencySeries.length / 6))} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fill: "#7E8794", fontSize: 10 }} width={36} />
+                  <Tooltip
+                    contentStyle={{ background: "#0E1116", border: "1px solid #1B2029", borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: "#F5F7F5" }}
+                    formatter={(v: number) => [`${v}ms`, "Latência"]}
+                  />
+                  <Area type="monotone" dataKey="ms" stroke="#A3E635" strokeWidth={2} fill="url(#lat-fill)" isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Status dos Redirecionamentos */}
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14px] font-semibold tracking-tight">Status dos Redirecionamentos</h3>
+              <span className="rounded-md border border-border bg-secondary px-2 py-1 text-[11px] text-muted-foreground">{PERIOD_SHORT[period]}</span>
+            </div>
+            <div className="mt-4 flex items-center gap-4">
+              <div className="h-[170px] w-[170px] shrink-0 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: "Sucesso", value: successStats.ok, color: "#A3E635" },
+                        { name: "Falhas", value: Math.max(successStats.fail, successStats.total ? 0 : 1), color: "#F43F5E" },
+                      ]}
+                      dataKey="value"
+                      innerRadius={55}
+                      outerRadius={78}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      <Cell fill="#A3E635" />
+                      <Cell fill="#F43F5E" />
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-[22px] font-semibold tabular-nums leading-none">
+                    {successStats.total ? ((successStats.ok / successStats.total) * 100).toFixed(1) : "0.0"}%
+                  </span>
+                  <span className="mt-0.5 text-[10.5px] uppercase tracking-wider text-muted-foreground">Sucesso</span>
+                </div>
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center justify-between text-[12px]">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-primary" />
+                    <span className="font-medium">Sucesso</span>
+                  </div>
+                  <div className="tabular-nums text-muted-foreground">{successStats.ok} <span className="opacity-70">({successStats.total ? ((successStats.ok / successStats.total) * 100).toFixed(1) : "0.0"}%)</span></div>
+                </div>
+                <div className="flex items-center justify-between text-[12px]">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-destructive" />
+                    <span className="font-medium">Falhas</span>
+                  </div>
+                  <div className="tabular-nums text-muted-foreground">{successStats.fail} <span className="opacity-70">({successStats.total ? ((successStats.fail / successStats.total) * 100).toFixed(1) : "0.0"}%)</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
+
+
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
