@@ -141,13 +141,21 @@ async function writeCacheEntry(key: Request, value: unknown) {
   }
 }
 
-/** Invalidate both layers of cache for a slug. Called from admin DELETE /r/$slug. */
-export async function purgeSlugCache(slug: string): Promise<boolean> {
+/**
+ * Invalidate both layers of cache for a slug. Called from admin DELETE /r/$slug.
+ * Needs the inbound request so the cache key matches the same zone-owned
+ * hostname used by handleRedirect.
+ */
+export async function purgeSlugCache(
+  slug: string,
+  request: Request,
+): Promise<boolean> {
   memLinks.delete(slug);
   const cache = getEdgeCache();
   if (!cache) return false;
   try {
-    return await cache.delete(cacheKeyForSlug(slug));
+    const origin = new URL(request.url).origin;
+    return await cache.delete(cacheKeyForSlug(origin, slug));
   } catch {
     return false;
   }
@@ -281,7 +289,13 @@ export async function handleRedirect(
   slug: string,
 ): Promise<Response> {
   const t0 = Date.now();
-  const linkCacheKey = cacheKeyForSlug(slug);
+  // Derive cache keys from the inbound request's own origin so caches.default
+  // actually persists writes (zone-ownership requirement).
+  const reqOrigin = (() => {
+    try { return new URL(request.url).origin; } catch { return "https://localhost"; }
+  })();
+  const linkCacheKey = cacheKeyForSlug(reqOrigin, slug);
+  const SETTINGS_CACHE_KEY = settingsCacheKey(reqOrigin);
 
   // ═══════════════════════════════════════════════════════════════════════
   // [HOT PATH] Step 1 — Resolve link from cache hierarchy
