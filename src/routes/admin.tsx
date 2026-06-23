@@ -484,7 +484,20 @@ function AdminPage() {
     return { totalClicks, activeSlugs, avgLatency };
   }, [stats, links]);
 
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0A0A0A] text-sm text-neutral-500">
+        Carregando…
+      </div>
+    );
+  }
+
+  if (location.pathname !== "/admin") {
+    return <Outlet />;
+  }
+
   return (
+
     <div className="min-h-screen bg-[#0A0A0A] text-[#FAFAFA] font-['DM_Sans']">
       <header className="sticky top-0 z-30 border-b border-white/5 bg-[#0A0A0A]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
