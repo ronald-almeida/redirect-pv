@@ -316,31 +316,37 @@ function AdminPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Remover este link?")) return;
+    const target = links.find((l) => l.id === id);
     const { error } = await supabase.from("links").delete().eq("id", id);
     if (error) {
       alert(error.message);
       return;
     }
+    if (target) purgeEdgeCache(target.slug);
     load();
   };
 
   const handleResetCounters = async (id: string) => {
     if (!confirm("Zerar contadores deste link? (cliques real/isca/espera não serão apagados)")) return;
+    const target = links.find((l) => l.id === id);
     const { error } = await supabase.rpc("reset_link_counters", { _link_id: id });
     if (error) {
       alert(error.message);
       return;
     }
+    if (target) purgeEdgeCache(target.slug);
     load();
     loadStats();
   };
 
   const handleRecomputeCounters = async (id: string) => {
+    const target = links.find((l) => l.id === id);
     const { error } = await supabase.rpc("recompute_link_counters", { _link_id: id });
     if (error) {
       alert(error.message);
       return;
     }
+    if (target) purgeEdgeCache(target.slug);
     load();
   };
 
@@ -367,6 +373,7 @@ function AdminPage() {
       alert(error.message);
       return;
     }
+    purgeEdgeCache(candidate);
     load();
   };
 
