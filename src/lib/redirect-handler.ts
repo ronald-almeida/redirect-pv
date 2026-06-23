@@ -303,9 +303,7 @@ export async function handleRedirect(
     link.mode === "waiting" ||
     (link.click_limit !== null && link.click_count >= link.click_limit)
   ) {
-    if (defaultWaitingPromise) {
-      defaultWaiting = await defaultWaitingPromise;
-    } else if (memSettings.current) {
+    if (memSettings.current) {
       defaultWaiting = memSettings.current.value;
       const age = (Date.now() - memSettings.current.storedAt) / 1000;
       if (age > CACHE_TTL_SECONDS) {
