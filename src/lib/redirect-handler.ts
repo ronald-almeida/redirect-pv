@@ -51,6 +51,30 @@ const SETTINGS_CACHE_KEY = new Request(
   "https://cache.internal/settings/default_waiting",
 );
 
+// ── In-memory isolate cache ────────────────────────────────────────────────
+// Workers isolates stay warm for many requests. Reading from a Map is ~µs vs
+// ~5–20ms for the edge Cache API. This is the single biggest hot-path win.
+type MemEntry<T> = { value: T; storedAt: number };
+const MEM_MAX = 500;
+const memLinks = new Map<string, MemEntry<LinkRow | null>>();
+const memSettings: { current: MemEntry<string | null> | null } = { current: null };
+
+function memGet(slug: string): MemEntry<LinkRow | null> | null {
+  const hit = memLinks.get(slug);
+  if (!hit) return null;
+  // refresh LRU position
+  memLinks.delete(slug);
+  memLinks.set(slug, hit);
+  return hit;
+}
+function memSet(slug: string, value: LinkRow | null) {
+  if (memLinks.size >= MEM_MAX) {
+    const firstKey = memLinks.keys().next().value;
+    if (firstKey !== undefined) memLinks.delete(firstKey);
+  }
+  memLinks.set(slug, { value, storedAt: Date.now() });
+}
+
 function getEdgeCache(): Cache | null {
   try {
     // @ts-ignore - Workers global
@@ -95,6 +119,7 @@ async function writeCacheEntry(key: Request, value: unknown) {
 }
 
 export async function purgeSlugCache(slug: string): Promise<boolean> {
+  memLinks.delete(slug);
   const cache = getEdgeCache();
   if (!cache) return false;
   try {
@@ -222,38 +247,55 @@ export async function handleRedirect(
   const url = new URL(request.url);
   const linkCacheKey = cacheKeyForSlug(slug);
 
-  // 1. Edge cache — serve stale instantly if present.
-  const cached = await readCacheEntry<LinkRow | null>(linkCacheKey);
-  let link: LinkRow | null = cached?.value ?? null;
-  let cacheStatus: "HIT" | "STALE" | "MISS" = "MISS";
+  // 1. In-memory isolate cache (µs). Falls back to edge cache (ms), then DB.
+  let link: LinkRow | null = null;
+  let cacheStatus: "HIT" | "STALE" | "MISS" | "MEM" = "MISS";
   let revalidate = false;
+  let storedAt = 0;
 
-  if (cached) {
-    const age = (Date.now() - cached.storedAt) / 1000;
-    if (age <= CACHE_TTL_SECONDS) {
-      cacheStatus = "HIT";
-    } else {
-      cacheStatus = "STALE";
-      revalidate = true;
+  const mem = memGet(slug);
+  if (mem) {
+    link = mem.value;
+    storedAt = mem.storedAt;
+    const age = (Date.now() - storedAt) / 1000;
+    cacheStatus = age <= CACHE_TTL_SECONDS ? "MEM" : "STALE";
+    if (age > CACHE_TTL_SECONDS) revalidate = true;
+  } else {
+    // Edge cache — serve stale instantly if present.
+    const cached = await readCacheEntry<LinkRow | null>(linkCacheKey);
+    if (cached) {
+      link = cached.value;
+      storedAt = cached.storedAt;
+      memSet(slug, link); // promote to isolate memory
+      const age = (Date.now() - storedAt) / 1000;
+      if (age <= CACHE_TTL_SECONDS) {
+        cacheStatus = "HIT";
+      } else {
+        cacheStatus = "STALE";
+        revalidate = true;
+      }
     }
   }
 
   // 2. Cache miss → fetch link AND settings in parallel (saves a round-trip
   //    when the mode ends up being `waiting` or hits a click limit).
   let defaultWaitingPromise: Promise<string | null> | null = null;
-  if (!cached) {
+  if (cacheStatus === "MISS") {
     const [linkRes, waitingRes] = await Promise.all([
       fetchLink(slug),
       fetchDefaultWaiting(),
     ]);
     link = linkRes;
     defaultWaitingPromise = Promise.resolve(waitingRes);
+    memSet(slug, link);
+    memSettings.current = { value: waitingRes, storedAt: Date.now() };
     scheduleBackground(writeCacheEntry(linkCacheKey, link));
     scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, waitingRes));
   } else if (revalidate) {
     scheduleBackground(
       (async () => {
         const fresh = await fetchLink(slug);
+        memSet(slug, fresh);
         await writeCacheEntry(linkCacheKey, fresh);
       })(),
     );
@@ -271,25 +313,41 @@ export async function handleRedirect(
   ) {
     if (defaultWaitingPromise) {
       defaultWaiting = await defaultWaitingPromise;
+    } else if (memSettings.current) {
+      defaultWaiting = memSettings.current.value;
+      const age = (Date.now() - memSettings.current.storedAt) / 1000;
+      if (age > CACHE_TTL_SECONDS) {
+        scheduleBackground(
+          (async () => {
+            const fresh = await fetchDefaultWaiting();
+            memSettings.current = { value: fresh, storedAt: Date.now() };
+            await writeCacheEntry(SETTINGS_CACHE_KEY, fresh);
+          })(),
+        );
+      }
     } else {
       const cachedSettings = await readCacheEntry<string | null>(SETTINGS_CACHE_KEY);
       if (cachedSettings) {
         defaultWaiting = cachedSettings.value;
+        memSettings.current = { value: cachedSettings.value, storedAt: cachedSettings.storedAt };
         const age = (Date.now() - cachedSettings.storedAt) / 1000;
         if (age > CACHE_TTL_SECONDS) {
           scheduleBackground(
             (async () => {
               const fresh = await fetchDefaultWaiting();
+              memSettings.current = { value: fresh, storedAt: Date.now() };
               await writeCacheEntry(SETTINGS_CACHE_KEY, fresh);
             })(),
           );
         }
       } else {
         defaultWaiting = await fetchDefaultWaiting();
+        memSettings.current = { value: defaultWaiting, storedAt: Date.now() };
         scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, defaultWaiting));
       }
     }
   }
+
 
   const ua = request.headers.get("user-agent") || "";
   const isBot = BOT_REGEX.test(ua);
