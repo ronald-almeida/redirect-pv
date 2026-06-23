@@ -500,32 +500,32 @@ function AdminPage() {
 
     <div className="min-h-screen bg-[#0A0A0A] text-[#FAFAFA] font-['DM_Sans']">
       <header className="sticky top-0 z-30 border-b border-white/5 bg-[#0A0A0A]/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-8">
-            <div className="flex shrink-0 items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-[#A3E635]">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-8">
+            <Link to="/admin" className="flex shrink-0 items-center gap-2 sm:gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-[#A3E635] sm:h-9 sm:w-9">
                 <Shield className="h-4 w-4 text-[#0A0A0A]" strokeWidth={2.5} />
               </div>
-              <span className="font-['Space_Grotesk'] text-lg font-bold tracking-tight text-[#FAFAFA] sm:text-xl">
+              <span className="hidden font-['Space_Grotesk'] text-lg font-bold tracking-tight text-[#FAFAFA] sm:inline sm:text-xl">
                 CloakPanel
               </span>
-            </div>
-            <nav className="flex items-center gap-1 text-xs font-medium sm:gap-4 sm:text-sm">
+            </Link>
+            <nav className="flex min-w-0 items-center gap-0.5 text-[11px] font-medium sm:gap-3 sm:text-sm">
               <Link
                 to="/admin"
-                className="rounded-md px-2 py-1.5 text-[#A3E635] sm:px-3"
+                className="rounded-md px-1.5 py-1.5 text-[#A3E635] sm:px-3"
               >
                 Links
               </Link>
               <Link
                 to="/admin/analytics"
-                className="rounded-md px-2 py-1.5 text-neutral-400 transition-colors hover:text-[#A3E635] sm:px-3"
+                className="rounded-md px-1.5 py-1.5 text-neutral-400 transition-colors hover:text-[#A3E635] sm:px-3"
               >
                 Analytics
               </Link>
               <Link
                 to="/admin/latency"
-                className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-neutral-400 transition-colors hover:text-[#A3E635] sm:px-3"
+                className="flex items-center gap-1 rounded-md px-1.5 py-1.5 text-neutral-400 transition-colors hover:text-[#A3E635] sm:gap-1.5 sm:px-3"
               >
                 Latência
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#A3E635]" />
@@ -535,13 +535,15 @@ function AdminPage() {
           <button
             type="button"
             onClick={handleSignOut}
-            className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-[#FAFAFA] sm:px-3 sm:text-sm"
+            aria-label="Sair"
+            className="inline-flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-[#FAFAFA] sm:px-3 sm:text-sm"
           >
             <LogOut className="h-4 w-4" />
             <span className="hidden sm:inline">Sair</span>
           </button>
         </div>
       </header>
+
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:space-y-8 sm:px-6 sm:py-10">
         {/* KPI strip */}
