@@ -16,9 +16,13 @@ export const Route = createFileRoute("/admin/latency")({
   component: LatencyPage,
 });
 
+type CacheStatus = "MEM" | "HIT" | "STALE" | "MISS";
+const CACHE_STATUSES: CacheStatus[] = ["MEM", "HIT", "STALE", "MISS"];
+
 type ClickLite = {
   link_id: string;
   redirect_ms: number | null;
+  cache_status: string | null;
   created_at: string;
 };
 type LinkLite = { id: string; slug: string; name: string | null };
@@ -28,6 +32,7 @@ type Stats = {
   avg: number;
   p50: number;
   p95: number;
+  p99: number;
   min: number;
   max: number;
 };
@@ -43,7 +48,7 @@ function percentile(sorted: number[], p: number): number {
 
 function computeStats(samples: number[]): Stats {
   if (samples.length === 0)
-    return { count: 0, avg: 0, p50: 0, p95: 0, min: 0, max: 0 };
+    return { count: 0, avg: 0, p50: 0, p95: 0, p99: 0, min: 0, max: 0 };
   const sorted = [...samples].sort((a, b) => a - b);
   const sum = sorted.reduce((s, v) => s + v, 0);
   return {
@@ -51,49 +56,114 @@ function computeStats(samples: number[]): Stats {
     avg: Math.round(sum / sorted.length),
     p50: percentile(sorted, 50),
     p95: percentile(sorted, 95),
+    p99: percentile(sorted, 99),
     min: sorted[0],
     max: sorted[sorted.length - 1],
   };
 }
 
+function badgeColor(status: string): string {
+  switch (status) {
+    case "MEM":
+      return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+    case "HIT":
+      return "bg-sky-500/20 text-sky-400 border-sky-500/30";
+    case "STALE":
+      return "bg-amber-500/20 text-amber-400 border-amber-500/30";
+    case "MISS":
+      return "bg-red-500/20 text-red-400 border-red-500/30";
+    default:
+      return "bg-neutral-500/20 text-neutral-400 border-neutral-500/30";
+  }
+}
+
+function p95Color(ms: number): string {
+  if (ms === 0) return "text-neutral-500";
+  if (ms < 50) return "text-emerald-400";
+  if (ms < 100) return "text-sky-400";
+  if (ms < 200) return "text-amber-400";
+  return "text-red-400";
+}
+
+// ─── Live test ──────────────────────────────────────────────────────────────
+
+type ProbeResult = {
+  index: number;
+  ms: number;
+  serverMs: number | null;
+  status: number;
+  xCache: string | null;
+  location: string | null;
+  error?: string;
+};
+
+async function probeOnce(slug: string, i: number): Promise<ProbeResult> {
+  const t0 = performance.now();
+  try {
+    const res = await fetch(`/r/${encodeURIComponent(slug)}?probe=${i}&t=${Date.now()}`, {
+      method: "GET",
+      redirect: "manual",
+      cache: "no-store",
+      headers: { "user-agent-hint": "latency-probe" },
+    });
+    const ms = Math.round(performance.now() - t0);
+    const xCache = res.headers.get("x-cache");
+    const timing = res.headers.get("server-timing") || "";
+    const m = /redirect;dur=(\d+(?:\.\d+)?)/.exec(timing);
+    const serverMs = m ? Math.round(Number(m[1])) : null;
+    return {
+      index: i,
+      ms,
+      serverMs,
+      status: res.status,
+      xCache,
+      location: res.headers.get("location"),
+    };
+  } catch (e) {
+    return {
+      index: i,
+      ms: Math.round(performance.now() - t0),
+      serverMs: null,
+      status: 0,
+      xCache: null,
+      location: null,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+// ─── Historical comparison helpers ──────────────────────────────────────────
+
 function toIso(date: string, endOfDay = false): string {
-  // BRT (America/Sao_Paulo, UTC-3). Build an ISO timestamp at boundaries.
   const time = endOfDay ? "23:59:59.999" : "00:00:00.000";
   return new Date(`${date}T${time}-03:00`).toISOString();
 }
-
 function todayBRT(): string {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  });
-  return fmt.format(new Date());
+  }).format(new Date());
 }
-
 function daysAgoBRT(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  const fmt = new Intl.DateTimeFormat("en-CA", {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  });
-  return fmt.format(d);
+  }).format(d);
 }
 
-async function fetchClicksRange(
-  fromIso: string,
-  toIso: string,
-): Promise<ClickLite[]> {
+async function fetchClicksRange(fromIso: string, toIso: string): Promise<ClickLite[]> {
   const all: ClickLite[] = [];
   const PAGE = 1000;
   for (let page = 0; page < 50; page++) {
     const { data, error } = await supabase
       .from("clicks")
-      .select("link_id, redirect_ms, created_at")
+      .select("link_id, redirect_ms, cache_status, created_at")
       .gte("created_at", fromIso)
       .lte("created_at", toIso)
       .order("created_at", { ascending: false })
@@ -105,60 +175,38 @@ async function fetchClicksRange(
   return all;
 }
 
-function aggregateBySlug(
-  clicks: ClickLite[],
-  links: LinkLite[],
-): Array<{ slug: string; name: string | null; stats: Stats }> {
-  const linkById = new Map(links.map((l) => [l.id, l]));
-  const buckets = new Map<string, number[]>();
+function statsByCache(clicks: ClickLite[]): Record<string, Stats> {
+  const buckets: Record<string, number[]> = { MEM: [], HIT: [], STALE: [], MISS: [], OTHER: [] };
   for (const c of clicks) {
     if (c.redirect_ms == null) continue;
-    const arr = buckets.get(c.link_id) ?? [];
-    arr.push(c.redirect_ms);
-    buckets.set(c.link_id, arr);
+    const key = (c.cache_status && CACHE_STATUSES.includes(c.cache_status as CacheStatus))
+      ? c.cache_status
+      : "OTHER";
+    buckets[key].push(c.redirect_ms);
   }
-  const out: Array<{ slug: string; name: string | null; stats: Stats }> = [];
-  for (const [linkId, samples] of buckets) {
-    const link = linkById.get(linkId);
-    if (!link) continue;
-    out.push({
-      slug: link.slug,
-      name: link.name,
-      stats: computeStats(samples),
-    });
-  }
-  out.sort((a, b) => b.stats.count - a.stats.count);
+  const out: Record<string, Stats> = {};
+  for (const k of Object.keys(buckets)) out[k] = computeStats(buckets[k]);
   return out;
 }
 
-function deltaCell(after: number, before: number) {
-  if (before === 0 && after === 0) return <span className="text-muted-foreground">—</span>;
-  if (before === 0) return <span className="text-muted-foreground">novo</span>;
-  const diff = after - before;
-  const pct = Math.round((diff / before) * 100);
-  const better = diff < 0;
-  return (
-    <span className={better ? "text-emerald-500" : diff > 0 ? "text-red-500" : "text-muted-foreground"}>
-      {diff > 0 ? "+" : ""}
-      {diff} ms ({pct > 0 ? "+" : ""}
-      {pct}%)
-    </span>
-  );
-}
+// ─── Page ───────────────────────────────────────────────────────────────────
 
 function LatencyPage() {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
-  const [loading, setLoading] = useState(false);
   const [links, setLinks] = useState<LinkLite[]>([]);
-  const [beforeClicks, setBeforeClicks] = useState<ClickLite[]>([]);
-  const [afterClicks, setAfterClicks] = useState<ClickLite[]>([]);
+  const [recentClicks, setRecentClicks] = useState<ClickLite[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Default: "before" = 7 dias atrás → ontem; "after" = hoje
-  const [beforeFrom, setBeforeFrom] = useState(daysAgoBRT(7));
-  const [beforeTo, setBeforeTo] = useState(daysAgoBRT(1));
-  const [afterFrom, setAfterFrom] = useState(todayBRT());
-  const [afterTo, setAfterTo] = useState(todayBRT());
+  // Live probe
+  const [probeSlug, setProbeSlug] = useState<string>("");
+  const [probeN, setProbeN] = useState<number>(20);
+  const [probing, setProbing] = useState(false);
+  const [results, setResults] = useState<ProbeResult[]>([]);
+
+  // Period stats
+  const [from, setFrom] = useState(todayBRT());
+  const [to, setTo] = useState(todayBRT());
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -181,13 +229,13 @@ function LatencyPage() {
         .from("links")
         .select("id, slug, name")
         .order("slug");
-      if (linksRes.data) setLinks(linksRes.data as LinkLite[]);
-      const [b, a] = await Promise.all([
-        fetchClicksRange(toIso(beforeFrom), toIso(beforeTo, true)),
-        fetchClicksRange(toIso(afterFrom), toIso(afterTo, true)),
-      ]);
-      setBeforeClicks(b);
-      setAfterClicks(a);
+      if (linksRes.data) {
+        const arr = linksRes.data as LinkLite[];
+        setLinks(arr);
+        if (!probeSlug && arr.length > 0) setProbeSlug(arr[0].slug);
+      }
+      const data = await fetchClicksRange(toIso(from), toIso(to, true));
+      setRecentClicks(data);
     } finally {
       setLoading(false);
     }
@@ -198,158 +246,225 @@ function LatencyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checking]);
 
-  const beforeBySlug = useMemo(
-    () => aggregateBySlug(beforeClicks, links),
-    [beforeClicks, links],
-  );
-  const afterBySlug = useMemo(
-    () => aggregateBySlug(afterClicks, links),
-    [afterClicks, links],
-  );
-
-  const allSlugs = useMemo(() => {
-    const set = new Set<string>();
-    beforeBySlug.forEach((r) => set.add(r.slug));
-    afterBySlug.forEach((r) => set.add(r.slug));
-    return Array.from(set).sort();
-  }, [beforeBySlug, afterBySlug]);
-
-  const rows = useMemo(() => {
-    const bMap = new Map(beforeBySlug.map((r) => [r.slug, r]));
-    const aMap = new Map(afterBySlug.map((r) => [r.slug, r]));
-    return allSlugs.map((slug) => ({
-      slug,
-      name: bMap.get(slug)?.name ?? aMap.get(slug)?.name ?? null,
-      before:
-        bMap.get(slug)?.stats ??
-        ({ count: 0, avg: 0, p50: 0, p95: 0, min: 0, max: 0 } as Stats),
-      after:
-        aMap.get(slug)?.stats ??
-        ({ count: 0, avg: 0, p50: 0, p95: 0, min: 0, max: 0 } as Stats),
-    }));
-  }, [allSlugs, beforeBySlug, afterBySlug]);
-
-  const totalBefore = useMemo(
-    () => computeStats(beforeClicks.map((c) => c.redirect_ms).filter((v): v is number => v != null)),
-    [beforeClicks],
-  );
-  const totalAfter = useMemo(
-    () => computeStats(afterClicks.map((c) => c.redirect_ms).filter((v): v is number => v != null)),
-    [afterClicks],
-  );
-
-  if (checking) {
-    return <div className="container mx-auto p-8">Carregando…</div>;
+  async function runProbe() {
+    if (!probeSlug) return;
+    setProbing(true);
+    setResults([]);
+    const out: ProbeResult[] = [];
+    for (let i = 1; i <= probeN; i++) {
+      const r = await probeOnce(probeSlug, i);
+      out.push(r);
+      setResults([...out]);
+    }
+    setProbing(false);
   }
+
+  const liveStatsByCache = useMemo(() => {
+    const buckets: Record<string, number[]> = { MEM: [], HIT: [], STALE: [], MISS: [], OTHER: [] };
+    for (const r of results) {
+      if (r.serverMs == null) continue;
+      const key = r.xCache && CACHE_STATUSES.includes(r.xCache as CacheStatus) ? r.xCache : "OTHER";
+      buckets[key].push(r.serverMs);
+    }
+    const out: Record<string, Stats> = {};
+    for (const k of Object.keys(buckets)) out[k] = computeStats(buckets[k]);
+    return out;
+  }, [results]);
+
+  const liveOverall = useMemo(
+    () => computeStats(results.map((r) => r.serverMs).filter((v): v is number => v != null)),
+    [results],
+  );
+
+  const historicalByCache = useMemo(() => statsByCache(recentClicks), [recentClicks]);
+  const historicalOverall = useMemo(
+    () => computeStats(recentClicks.map((c) => c.redirect_ms).filter((v): v is number => v != null)),
+    [recentClicks],
+  );
+
+  if (checking) return <div className="container mx-auto p-8">Carregando…</div>;
+
+  const stabilized =
+    results.length >= 5 &&
+    results.slice(-5).every((r) => r.xCache === "MEM" || r.xCache === "HIT");
+  const p95Live = liveOverall.p95;
+  const passed = results.length >= 10 && stabilized && p95Live < 100;
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Latência por slug</h1>
+          <h1 className="text-2xl font-semibold">Latência de Redirect</h1>
           <p className="text-sm text-muted-foreground">
-            Compare a latência de redirecionamento entre dois períodos (BRT).
+            Breakdown por <code>X-Cache</code> usando <code>Server-Timing: redirect;dur=…</code> (tempo do Worker, não do browser).
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
             <Link to="/admin">← Voltar</Link>
           </Button>
-          <Button onClick={() => void loadAll()} disabled={loading}>
-            {loading ? "Carregando…" : "Atualizar"}
-          </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="p-4 space-y-3">
-          <div className="font-medium">Período ANTES</div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label htmlFor="bf">De</Label>
-              <Input id="bf" type="date" value={beforeFrom} onChange={(e) => setBeforeFrom(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="bt">Até</Label>
-              <Input id="bt" type="date" value={beforeTo} onChange={(e) => setBeforeTo(e.target.value)} />
-            </div>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {totalBefore.count} cliques · avg {totalBefore.avg}ms · p50 {totalBefore.p50}ms · p95 {totalBefore.p95}ms
-          </div>
-        </Card>
-
-        <Card className="p-4 space-y-3">
-          <div className="font-medium">Período DEPOIS</div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label htmlFor="af">De</Label>
-              <Input id="af" type="date" value={afterFrom} onChange={(e) => setAfterFrom(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="at">Até</Label>
-              <Input id="at" type="date" value={afterTo} onChange={(e) => setAfterTo(e.target.value)} />
-            </div>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {totalAfter.count} cliques · avg {totalAfter.avg}ms · p50 {totalAfter.p50}ms · p95 {totalAfter.p95}ms
-          </div>
-        </Card>
-      </div>
-
-      <Card className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-left">
-            <tr>
-              <th className="px-3 py-2">Slug</th>
-              <th className="px-3 py-2">Cliques (A/D)</th>
-              <th className="px-3 py-2">avg antes</th>
-              <th className="px-3 py-2">avg depois</th>
-              <th className="px-3 py-2">Δ avg</th>
-              <th className="px-3 py-2">p50 antes</th>
-              <th className="px-3 py-2">p50 depois</th>
-              <th className="px-3 py-2">p95 antes</th>
-              <th className="px-3 py-2">p95 depois</th>
-              <th className="px-3 py-2">min/max depois</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">
-                  {loading ? "Carregando…" : "Sem dados nos períodos selecionados."}
-                </td>
-              </tr>
-            )}
-            {rows.map((r) => (
-              <tr key={r.slug} className="border-t border-border/50">
-                <td className="px-3 py-2 font-mono">
-                  {r.slug}
-                  {r.name ? <span className="ml-2 text-xs text-muted-foreground">{r.name}</span> : null}
-                </td>
-                <td className="px-3 py-2">
-                  {r.before.count} / {r.after.count}
-                </td>
-                <td className="px-3 py-2">{r.before.avg} ms</td>
-                <td className="px-3 py-2">{r.after.avg} ms</td>
-                <td className="px-3 py-2">{deltaCell(r.after.avg, r.before.avg)}</td>
-                <td className="px-3 py-2">{r.before.p50} ms</td>
-                <td className="px-3 py-2">{r.after.p50} ms</td>
-                <td className="px-3 py-2">{r.before.p95} ms</td>
-                <td className="px-3 py-2">{r.after.p95} ms</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {r.after.min}–{r.after.max} ms
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* ─── Cache validation note ─── */}
+      <Card className="p-4 bg-emerald-500/5 border-emerald-500/20">
+        <div className="text-sm">
+          <span className="font-medium text-emerald-400">✓ Cache-Control: no-store NÃO bloqueia o Edge Cache interno.</span>{" "}
+          <span className="text-muted-foreground">
+            O header <code>no-store</code> está apenas na resposta 302 (impede o browser/CDN de cachear o redirect, comportamento desejado).
+            O cache interno do Worker usa <code>caches.default.put()</code> com uma <em>Response própria</em> que carrega{" "}
+            <code>Cache-Control: public, max-age=86400</code> — totalmente independente da resposta enviada ao usuário.
+            O cache em memória do isolate (camada MEM) também é independente. Veja <code>src/lib/redirect-handler.ts</code> linha ~120.
+          </span>
+        </div>
       </Card>
 
-      <p className="text-xs text-muted-foreground">
-        Fonte: tabela <code>clicks.redirect_ms</code>. Cada redirect grava o tempo medido no Worker (
-        <code>Server-Timing: redirect;dur=…</code>). Bots e prefetch são ignorados na coleta.
-      </p>
+      {/* ─── Live 20-hit probe ─── */}
+      <Card className="p-4 space-y-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <Label htmlFor="probe-slug">Slug para testar</Label>
+            <select
+              id="probe-slug"
+              value={probeSlug}
+              onChange={(e) => setProbeSlug(e.target.value)}
+              className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {links.map((l) => (
+                <option key={l.id} value={l.slug}>
+                  /{l.slug} {l.name ? `· ${l.name}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-32">
+            <Label htmlFor="probe-n">Nº de hits</Label>
+            <Input
+              id="probe-n"
+              type="number"
+              min={1}
+              max={100}
+              value={probeN}
+              onChange={(e) => setProbeN(Math.max(1, Math.min(100, Number(e.target.value) || 20)))}
+            />
+          </div>
+          <Button onClick={() => void runProbe()} disabled={probing || !probeSlug}>
+            {probing ? `Testando ${results.length}/${probeN}…` : `Rodar ${probeN} hits`}
+          </Button>
+        </div>
+
+        {results.length > 0 && (
+          <>
+            <div className="flex flex-wrap gap-2 text-xs">
+              {results.map((r) => (
+                <span
+                  key={r.index}
+                  className={`inline-flex items-center gap-1 rounded border px-2 py-1 font-mono ${badgeColor(r.xCache || "")}`}
+                  title={`hit ${r.index} · navegador ${r.ms}ms · server ${r.serverMs ?? "?"}ms · status ${r.status}`}
+                >
+                  #{r.index} {r.xCache || "?"} · {r.serverMs ?? "?"}ms
+                </span>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              <StatTile label="GERAL" stats={liveOverall} highlight />
+              {CACHE_STATUSES.map((s) => (
+                <StatTile key={s} label={s} stats={liveStatsByCache[s]} status={s} />
+              ))}
+            </div>
+
+            <div
+              className={`rounded-md border p-3 text-sm ${
+                passed
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+              }`}
+            >
+              {passed ? (
+                <>✓ <strong>Aprovado</strong>: p95 = {p95Live}ms (&lt; 100ms) e os últimos 5 hits ficaram em MEM/HIT.</>
+              ) : (
+                <>
+                  {results.length < probeN
+                    ? `Em andamento (${results.length}/${probeN})…`
+                    : `Atenção: p95 = ${p95Live}ms · estabilizado em MEM/HIT? ${stabilized ? "sim" : "não"}.`}
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </Card>
+
+      {/* ─── Historical breakdown ─── */}
+      <Card className="p-4 space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label htmlFor="hf">De</Label>
+            <Input id="hf" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="ht">Até</Label>
+            <Input id="ht" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <Button variant="outline" onClick={() => void loadAll()} disabled={loading}>
+            {loading ? "Carregando…" : "Recarregar"}
+          </Button>
+          <div className="text-xs text-muted-foreground">
+            {recentClicks.length} cliques no período · fonte: <code>clicks.redirect_ms</code> + <code>clicks.cache_status</code>.
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <StatTile label="GERAL" stats={historicalOverall} highlight />
+          {CACHE_STATUSES.map((s) => (
+            <StatTile key={s} label={s} stats={historicalByCache[s]} status={s} />
+          ))}
+        </div>
+
+        {(historicalByCache["OTHER"]?.count ?? 0) > 0 && (
+          <div className="text-xs text-muted-foreground">
+            {historicalByCache["OTHER"].count} cliques antigos sem <code>cache_status</code> registrado (anteriores à migração).
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function StatTile({
+  label,
+  stats,
+  status,
+  highlight,
+}: {
+  label: string;
+  stats: Stats | undefined;
+  status?: string;
+  highlight?: boolean;
+}) {
+  const s = stats ?? { count: 0, avg: 0, p50: 0, p95: 0, p99: 0, min: 0, max: 0 };
+  return (
+    <div
+      className={`rounded-md border p-3 ${
+        highlight
+          ? "border-white/20 bg-white/5"
+          : status
+            ? badgeColor(status)
+            : "border-white/10 bg-white/[0.02]"
+      }`}
+    >
+      <div className="text-[10px] uppercase tracking-wider opacity-80">{label}</div>
+      <div className="mt-1 font-mono text-xs space-y-0.5">
+        <div>
+          n=<span className="tabular-nums">{s.count}</span>
+        </div>
+        <div>p50 <span className="tabular-nums">{s.p50}ms</span></div>
+        <div>
+          p95 <span className={`tabular-nums font-semibold ${p95Color(s.p95)}`}>{s.p95}ms</span>
+        </div>
+        <div>p99 <span className="tabular-nums">{s.p99}ms</span></div>
+        <div className="opacity-70">avg {s.avg}ms · {s.min}–{s.max}</div>
+      </div>
     </div>
   );
 }

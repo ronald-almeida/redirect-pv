@@ -438,6 +438,7 @@ export async function handleRedirect(
     const reqUrl = request.url;
     const reqHeaders = request.headers;
     const cfRay = reqHeaders.get("cf-ray") || "";
+    const cacheStatusForLog = cacheStatus;
 
     scheduleBackground(
       (async () => {
@@ -512,6 +513,7 @@ export async function handleRedirect(
             device,
             is_vpn: false,
             redirect_ms: redirectMs,
+            cache_status: cacheStatusForLog,
             utm_source: utmSource,
             utm_medium: utmMedium,
             utm_campaign: utmCampaign,

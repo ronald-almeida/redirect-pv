@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       clicks: {
         Row: {
+          cache_status: string | null
           country: string | null
           created_at: string
           device: string | null
@@ -30,6 +31,7 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          cache_status?: string | null
           country?: string | null
           created_at?: string
           device?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          cache_status?: string | null
           country?: string | null
           created_at?: string
           device?: string | null
