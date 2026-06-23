@@ -1,374 +1,343 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend,
+  Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  type ClickRow,
-  type Mode,
-  aggregate,
-  countryFlag,
-  topEntries,
-} from "@/lib/analytics";
+import { AdminShell, type AdminPeriod } from "@/components/admin/AdminShell";
+import { rangeForPreset, type DateRange } from "@/lib/date-range";
+import { type ClickRow, aggregate, countryFlag, topEntries } from "@/lib/analytics";
+import { TrendingUp, Globe, Smartphone, Monitor } from "lucide-react";
 
 export const Route = createFileRoute("/admin/analytics")({
-  head: () => ({
-    meta: [
-      { title: "Analytics · Painel" },
-      { name: "description", content: "Analytics global dos links." },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Analytics · CloakPanel" }] }),
   component: AnalyticsPage,
 });
 
-interface LinkLite {
-  id: string;
-  slug: string;
-  name: string | null;
+function periodToRange(p: AdminPeriod): DateRange {
+  if (p === "24h") return rangeForPreset("today");
+  if (p === "7d") return rangeForPreset("7d");
+  if (p === "30d") return rangeForPreset("30d");
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 90);
+  return { start, end, preset: "custom" };
 }
 
+interface LinkLite { id: string; slug: string; name: string | null }
+
+const chartTheme = {
+  axis: "#3F3F46",
+  grid: "#1C1C20",
+  tooltipBg: "#0F0F10",
+  tooltipBorder: "#27272A",
+};
+
+const TooltipStyle = {
+  background: chartTheme.tooltipBg,
+  border: `1px solid ${chartTheme.tooltipBorder}`,
+  borderRadius: 8,
+  fontSize: 11,
+  padding: "6px 10px",
+};
+
 function AnalyticsPage() {
-  const navigate = useNavigate();
-  const [checking, setChecking] = useState(true);
+  const [period, setPeriod] = useState<AdminPeriod>("7d");
   const [clicks, setClicks] = useState<ClickRow[]>([]);
   const [links, setLinks] = useState<LinkLite[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [latency, setLatency] = useState<{ created_at: string; redirect_ms: number | null }[]>([]);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        navigate({ to: "/login" });
-        return;
-      }
-      setChecking(false);
-      void loadAll();
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (!session) navigate({ to: "/login" });
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+  const range = useMemo(() => periodToRange(period), [period]);
 
-  // Realtime: prepend new clicks as they arrive
-  useEffect(() => {
-    const channel = supabase
-      .channel("analytics-clicks-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "clicks" },
-        (payload) => {
-          const r = payload.new as ClickRow;
-          setClicks((prev) => [r, ...prev].slice(0, 1000));
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  useEffect(() => { void load(); }, [range.start?.getTime()]);
 
-  const loadAll = async () => {
-    setLoading(true);
-    const [clicksRes, linksRes] = await Promise.all([
-      supabase
-        .from("clicks")
-        .select(
-          "link_id, mode_at_click, country, device, is_vpn, utm_source, created_at",
-        )
-        .order("created_at", { ascending: false })
-        .limit(1000),
+  async function load() {
+    if (!range.start) return;
+    const endIso = (range.end ?? new Date()).toISOString();
+    const [c, l, lat] = await Promise.all([
+      supabase.from("clicks")
+        .select("link_id, mode_at_click, country, device, is_vpn, utm_source, created_at")
+        .gte("created_at", range.start.toISOString()).lt("created_at", endIso)
+        .order("created_at", { ascending: false }).limit(10000),
       supabase.from("links").select("id, slug, name"),
+      supabase.from("clicks")
+        .select("created_at, redirect_ms")
+        .gte("created_at", range.start.toISOString()).lt("created_at", endIso)
+        .not("redirect_ms", "is", null)
+        .order("created_at", { ascending: false }).limit(10000),
     ]);
-    if (clicksRes.error) console.error("clicks query error", clicksRes.error);
-    if (linksRes.error) console.error("links query error", linksRes.error);
-    setClicks((clicksRes.data ?? []) as ClickRow[]);
-    setLinks((linksRes.data ?? []) as LinkLite[]);
-    setLoading(false);
-  };
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate({ to: "/login" });
-  };
-
-  const data = useMemo(() => {
-    const totals = { real: 0, decoy: 0, waiting: 0 };
-    const countries: Record<string, number> = {};
-    const devices = { mobile: 0, desktop: 0 };
-    const perLink: Record<string, number> = {};
-    const perDay: Record<string, number> = {};
-
-    // Build last 30 days (oldest -> newest) skeleton
-    const days: string[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      days.push(key);
-      perDay[key] = 0;
-    }
-    const cutoff = new Date(today);
-    cutoff.setDate(cutoff.getDate() - 29);
-
-    for (const r of clicks) {
-      const baseMode = r.mode_at_click.split(":")[0] as Mode;
-      if (baseMode === "real" || baseMode === "decoy" || baseMode === "waiting") {
-        totals[baseMode] += 1;
-      }
-      if (r.country) countries[r.country] = (countries[r.country] ?? 0) + 1;
-      if (r.device === "mobile") devices.mobile += 1;
-      else if (r.device === "desktop") devices.desktop += 1;
-      perLink[r.link_id] = (perLink[r.link_id] ?? 0) + 1;
-      const day = r.created_at.slice(0, 10);
-      if (new Date(day).getTime() >= cutoff.getTime() && day in perDay) {
-        perDay[day] += 1;
-      }
-    }
-
-    const linkById = new Map(links.map((l) => [l.id, l]));
-    const topLinks = topEntries(perLink, 5).map(([id, n]) => {
-      const link = linkById.get(id);
-      return {
-        id,
-        slug: link?.slug ?? id.slice(0, 8),
-        name: link?.name ?? null,
-        count: n,
-      };
-    });
-    const topCountries = topEntries(countries, 5);
-    const totalDevices = devices.mobile + devices.desktop;
-    const chartData = days.map((d) => ({
-      day: d.slice(5),
-      cliques: perDay[d],
-    }));
-
-    return { totals, topLinks, topCountries, devices, totalDevices, chartData };
-  }, [clicks, links]);
-
-  if (checking) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Carregando…
-      </div>
-    );
+    setClicks((c.data ?? []) as ClickRow[]);
+    setLinks((l.data ?? []) as LinkLite[]);
+    setLatency((lat.data ?? []) as { created_at: string; redirect_ms: number }[]);
   }
 
-  const mobilePct = data.totalDevices
-    ? (data.devices.mobile / data.totalDevices) * 100
-    : 0;
-  const desktopPct = data.totalDevices
-    ? (data.devices.desktop / data.totalDevices) * 100
-    : 0;
-  const allTotal = data.totals.real + data.totals.decoy + data.totals.waiting;
+  const data = useMemo(() => {
+    const start = range.start?.getTime() ?? 0;
+    const end = (range.end ?? new Date()).getTime();
+    const days = Math.max(1, Math.ceil((end - start) / 86_400_000));
+    const buckets = Math.min(days, 30);
+    const labels: string[] = [];
+    const volume: number[] = new Array(buckets).fill(0);
+    const successCount: number[] = new Array(buckets).fill(0);
+
+    for (let i = 0; i < buckets; i++) {
+      const d = new Date(start + ((end - start) * (i + 0.5)) / buckets);
+      labels.push(d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }));
+    }
+
+    for (const c of clicks) {
+      const t = new Date(c.created_at).getTime();
+      const idx = Math.min(buckets - 1, Math.max(0, Math.floor(((t - start) / (end - start)) * buckets)));
+      volume[idx]++;
+      if (c.mode_at_click.startsWith("real") || c.mode_at_click.startsWith("decoy")) successCount[idx]++;
+    }
+
+    const volumeData = labels.map((day, i) => ({ day, cliques: volume[i], success: successCount[i] }));
+
+    // Latency over time (p50 + p95)
+    const latBuckets: number[][] = Array.from({ length: buckets }, () => []);
+    for (const r of latency) {
+      if (r.redirect_ms == null) continue;
+      const t = new Date(r.created_at).getTime();
+      const idx = Math.min(buckets - 1, Math.max(0, Math.floor(((t - start) / (end - start)) * buckets)));
+      latBuckets[idx].push(r.redirect_ms);
+    }
+    const pct = (arr: number[], p: number) => {
+      if (!arr.length) return 0;
+      const s = [...arr].sort((a, b) => a - b);
+      return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))];
+    };
+    const latData = labels.map((day, i) => ({ day, p50: pct(latBuckets[i], 50), p95: pct(latBuckets[i], 95) }));
+
+    const agg = aggregate(clicks);
+    const allCountries: Record<string, number> = {};
+    const allUtm: Record<string, number> = {};
+    let real = 0, decoy = 0, waiting = 0, mobile = 0, desktop = 0;
+    const perLink: Record<string, number> = {};
+    for (const c of clicks) {
+      const baseMode = c.mode_at_click.split(":")[0];
+      if (baseMode === "real") real++;
+      else if (baseMode === "decoy") decoy++;
+      else if (baseMode === "waiting") waiting++;
+      if (c.country) allCountries[c.country] = (allCountries[c.country] ?? 0) + 1;
+      if (c.device === "mobile") mobile++;
+      else if (c.device === "desktop") desktop++;
+      if (c.utm_source) allUtm[c.utm_source] = (allUtm[c.utm_source] ?? 0) + 1;
+      perLink[c.link_id] = (perLink[c.link_id] ?? 0) + 1;
+    }
+    const linkMap = new Map(links.map((l) => [l.id, l]));
+    const topLinks = topEntries(perLink, 7).map(([id, n]) => ({
+      slug: linkMap.get(id)?.slug ?? id.slice(0, 6),
+      name: linkMap.get(id)?.name ?? null,
+      count: n,
+    }));
+    const topCountries = topEntries(allCountries, 6);
+    const total = clicks.length || 1;
+    const successRate = ((real + decoy) / total) * 100;
+
+    const distribution = [
+      { name: "Real", value: real, color: "#34D399" },
+      { name: "Isca", value: decoy, color: "#FBBF24" },
+      { name: "Espera", value: waiting, color: "#71717A" },
+    ];
+
+    return { volumeData, latData, distribution, topLinks, topCountries, successRate, mobile, desktop, total: clicks.length, agg };
+  }, [clicks, latency, links, range.start, range.end]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/15 text-primary">
-                <span className="text-sm font-bold">C</span>
-              </div>
-              <span className="text-base font-semibold tracking-tight text-primary">
-                CloakPanel
-              </span>
+    <AdminShell period={period} onPeriod={setPeriod}>
+      <div className="px-4 md:px-6 py-6 space-y-5">
+        {/* Top row */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <Card title="Volume de cliques" subtitle={`${data.total.toLocaleString("pt-BR")} cliques no período`} className="lg:col-span-2">
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data.volumeData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="g-vol" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366F1" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="#6366F1" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+                  <XAxis dataKey="day" stroke={chartTheme.axis} tick={{ fontSize: 10, fill: "#71717A" }} />
+                  <YAxis stroke={chartTheme.axis} tick={{ fontSize: 10, fill: "#71717A" }} width={32} />
+                  <Tooltip contentStyle={TooltipStyle} cursor={{ stroke: "#3F3F46", strokeDasharray: 3 }} />
+                  <Area type="monotone" dataKey="cliques" stroke="#6366F1" strokeWidth={1.75} fill="url(#g-vol)" />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
-            <nav className="flex items-center gap-1 text-sm">
-              <Link
-                to="/admin"
-                className="rounded-md px-3 py-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-              >
-                Links
-              </Link>
-              <Link
-                to="/admin/analytics"
-                className="rounded-md bg-secondary px-3 py-1.5 font-medium text-foreground"
-              >
-                Analytics
-              </Link>
-            </nav>
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleSignOut}>
-            Sair
-          </Button>
-        </div>
-      </header>
+          </Card>
 
-      <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
-        {loading && (
-          <p className="text-sm text-muted-foreground">Carregando dados…</p>
-        )}
+          <Card title="Distribuição por tipo" subtitle="Real vs Isca vs Espera">
+            <div className="h-56 flex items-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={data.distribution} dataKey="value" innerRadius={50} outerRadius={80} stroke="none" paddingAngle={2}>
+                    {data.distribution.map((d) => <Cell key={d.name} fill={d.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={TooltipStyle} />
+                  <Legend
+                    verticalAlign="bottom"
+                    iconType="circle"
+                    iconSize={6}
+                    formatter={(v) => <span className="text-[11px] text-muted-foreground">{v}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </section>
 
-        <Card className="rounded-[10px] border-border bg-card p-6">
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Total de cliques
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <TotalBox label="Total geral" value={allTotal} accent="#fafafa" />
-            <TotalBox label="Real" value={data.totals.real} accent="#22c55e" />
-            <TotalBox label="Isca" value={data.totals.decoy} accent="#eab308" />
-            <TotalBox label="Espera" value={data.totals.waiting} accent="#71717a" />
-          </div>
-        </Card>
+        {/* Second row */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <Card title="Latência ao longo do tempo" subtitle="p50 vs p95 (ms)" className="lg:col-span-2">
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data.latData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+                  <XAxis dataKey="day" stroke={chartTheme.axis} tick={{ fontSize: 10, fill: "#71717A" }} />
+                  <YAxis stroke={chartTheme.axis} tick={{ fontSize: 10, fill: "#71717A" }} width={32} />
+                  <Tooltip contentStyle={TooltipStyle} />
+                  <Legend iconType="circle" iconSize={6} formatter={(v) => <span className="text-[11px] text-muted-foreground">{v}</span>} />
+                  <Line type="monotone" dataKey="p50" stroke="#22D3EE" strokeWidth={1.75} dot={false} />
+                  <Line type="monotone" dataKey="p95" stroke="#F472B6" strokeWidth={1.75} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
 
-        <Card className="rounded-[10px] border-border bg-card p-6">
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Cliques nos últimos 30 dias
-          </h2>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f1f1f" />
-                <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#71717a" }} stroke="#222" />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{ fontSize: 11, fill: "#71717a" }}
-                  stroke="#222"
-                  width={28}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "#111",
-                    border: "1px solid #222",
-                    borderRadius: 6,
-                    fontSize: 12,
-                  }}
-                  labelStyle={{ color: "#71717a" }}
-                  itemStyle={{ color: "#fafafa" }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="cliques"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, fill: "#6366f1" }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+          <Card title="Taxa de sucesso" subtitle="Real + Isca / Total">
+            <div className="flex flex-col items-center justify-center h-56 gap-2">
+              <div className="relative">
+                <svg width="160" height="160" viewBox="0 0 160 160">
+                  <circle cx="80" cy="80" r="64" stroke="#1C1C20" strokeWidth="10" fill="none" />
+                  <circle
+                    cx="80" cy="80" r="64"
+                    stroke={data.successRate >= 95 ? "#34D399" : data.successRate >= 80 ? "#FBBF24" : "#F43F5E"}
+                    strokeWidth="10" fill="none" strokeLinecap="round"
+                    strokeDasharray={`${(data.successRate / 100) * 402} 402`}
+                    transform="rotate(-90 80 80)"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-3xl font-semibold tabular-nums">{data.successRate.toFixed(1)}%</span>
+                  <span className="text-[11px] text-muted-foreground">{data.total.toLocaleString("pt-BR")} cliques</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </section>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card className="rounded-[10px] border-border bg-card p-6">
-            <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-              Top 5 links
-            </h2>
-            {data.topLinks.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sem dados ainda.</p>
-            ) : (
-              <ul className="space-y-2">
-                {data.topLinks.map((l) => (
-                  <li
-                    key={l.id}
-                    className="flex items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">
-                        {l.name?.trim() || `/${l.slug}`}
+        {/* Third row */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <Card title="Evolução diária" subtitle="Cliques por bucket" className="lg:col-span-2">
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data.volumeData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+                  <XAxis dataKey="day" stroke={chartTheme.axis} tick={{ fontSize: 10, fill: "#71717A" }} />
+                  <YAxis stroke={chartTheme.axis} tick={{ fontSize: 10, fill: "#71717A" }} width={32} />
+                  <Tooltip contentStyle={TooltipStyle} cursor={{ fill: "rgba(99,102,241,0.08)" }} />
+                  <Bar dataKey="cliques" fill="#6366F1" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card title="Top slugs" subtitle="Mais acessados no período">
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              {data.topLinks.length === 0 && <p className="text-xs text-muted-foreground">Sem dados</p>}
+              {data.topLinks.map((l, i) => {
+                const max = data.topLinks[0]?.count || 1;
+                const pct = (l.count / max) * 100;
+                return (
+                  <div key={l.slug} className="group">
+                    <div className="flex items-center justify-between text-[12px]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-4 text-[10px] tabular-nums text-muted-foreground">{i + 1}</span>
+                        <span className="font-mono truncate">/{l.slug}</span>
                       </div>
-                      {l.name?.trim() && (
-                        <div className="truncate font-mono text-xs text-muted-foreground">
-                          /{l.slug}
-                        </div>
-                      )}
+                      <span className="tabular-nums font-medium">{l.count}</span>
                     </div>
-                    <span className="tabular-nums font-semibold text-primary">{l.count}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card className="rounded-[10px] border-border bg-card p-6">
-            <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-              Top países
-            </h2>
-            {data.topCountries.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sem dados ainda.</p>
-            ) : (
-              <ul className="space-y-2">
-                {data.topCountries.map(([cc, n]) => (
-                  <li
-                    key={cc}
-                    className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="text-base">{countryFlag(cc)}</span>
-                      <span className="font-mono">{cc}</span>
-                    </span>
-                    <span className="tabular-nums font-semibold text-primary">{n}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-
-        <Card className="rounded-[10px] border-border bg-card p-6">
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Dispositivos (geral)
-          </h2>
-          {data.totalDevices === 0 ? (
-            <p className="text-sm text-muted-foreground">Sem dados ainda.</p>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex h-3 overflow-hidden rounded-full bg-secondary">
-                <div style={{ width: `${mobilePct}%`, background: "#6366f1" }} />
-                <div style={{ width: `${desktopPct}%`, background: "#a78bfa" }} />
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full" style={{ background: "#6366f1" }} />
-                  Mobile {mobilePct.toFixed(0)}% ({data.devices.mobile})
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full" style={{ background: "#a78bfa" }} />
-                  Desktop {desktopPct.toFixed(0)}% ({data.devices.desktop})
-                </span>
-              </div>
+                    <div className="mt-1 h-1 rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full bg-foreground/60" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </Card>
+          </Card>
+        </section>
 
-        <p className="text-xs text-muted-foreground">
-          Mostrando até os 1000 cliques mais recentes.
-        </p>
-      </main>
-    </div>
+        {/* Fourth row */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <Card title="Top países" subtitle="Origem do tráfego" icon={Globe}>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {data.topCountries.length === 0 && <p className="text-xs text-muted-foreground">Sem dados</p>}
+              {data.topCountries.map(([cc, n]) => (
+                <div key={cc} className="flex items-center justify-between text-[12.5px] border-b border-border last:border-0 pb-1.5 last:pb-0">
+                  <span className="flex items-center gap-2">
+                    <span className="text-base leading-none">{countryFlag(cc)}</span>
+                    <span className="font-mono text-muted-foreground">{cc}</span>
+                  </span>
+                  <span className="tabular-nums font-medium">{n}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card title="Dispositivos" subtitle="Mobile vs Desktop" icon={TrendingUp}>
+            {data.mobile + data.desktop === 0 ? (
+              <p className="text-xs text-muted-foreground">Sem dados</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex h-2.5 overflow-hidden rounded-full bg-secondary">
+                  <div className="bg-indigo-500" style={{ width: `${(data.mobile / (data.mobile + data.desktop)) * 100}%` }} />
+                  <div className="bg-fuchsia-400" style={{ width: `${(data.desktop / (data.mobile + data.desktop)) * 100}%` }} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/50 p-3">
+                    <Smartphone className="h-4 w-4 text-indigo-400" />
+                    <div className="flex-1">
+                      <div className="text-[11px] text-muted-foreground">Mobile</div>
+                      <div className="text-lg font-semibold tabular-nums">{data.mobile}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/50 p-3">
+                    <Monitor className="h-4 w-4 text-fuchsia-400" />
+                    <div className="flex-1">
+                      <div className="text-[11px] text-muted-foreground">Desktop</div>
+                      <div className="text-lg font-semibold tabular-nums">{data.desktop}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Card>
+        </section>
+      </div>
+    </AdminShell>
   );
 }
 
-function TotalBox({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent: string;
+function Card({ title, subtitle, children, className, icon: Icon }: {
+  title: string; subtitle?: string; children: React.ReactNode; className?: string;
+  icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="rounded-md border border-border bg-background px-4 py-3">
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-        <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
-        {label}
+    <div className={`rounded-lg border border-border bg-card p-4 ${className ?? ""}`}>
+      <div className="mb-3 flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-1.5">
+            {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
+            <h3 className="text-[13px] font-semibold tracking-tight">{title}</h3>
+          </div>
+          {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
       </div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums" style={{ color: accent }}>
-        {value}
-      </div>
+      {children}
     </div>
   );
 }
