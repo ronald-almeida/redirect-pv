@@ -989,7 +989,7 @@ function ModePills({
 }) {
   const current = (l.mode as Mode) ?? "waiting";
   return (
-    <div className="flex flex-wrap rounded-full border border-border bg-background p-0.5">
+    <div className="inline-flex w-fit shrink-0 flex-nowrap rounded-full border border-white/10 bg-[#0A0A0A] p-0.5">
       {(["real", "decoy", "waiting"] as Mode[]).map((m) => {
         const active = current === m;
         const meta = MODE_META[m];
