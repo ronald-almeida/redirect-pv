@@ -1,6 +1,27 @@
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+/**
+ * Redirect hot path.
+ *
+ * Goal: p50 < 30ms, p95 < 100ms (slugs ativos).
+ *
+ * Architecture
+ * ────────────
+ *   [HOT PATH]            Memory Map → Edge Cache → DB (cold miss only)
+ *   [BACKGROUND TRACKING] All analytics/metrics via ctx.waitUntil
+ *   [CACHE REFRESH]       SWR — stale served instantly, refreshed off the wire
+ *   [COLD MISS FALLBACK]  1 query, only essential columns; missing slug → 404
+ *
+ * Before the 302 we ONLY do:
+ *   1. memory map lookup (µs)
+ *   2. edge cache read on miss (~5–20ms)
+ *   3. UA regex + IP read (no awaits, ~µs)
+ *   4. pickDestination (pure CPU)
+ *
+ * Everything else — URL parse, UTM extraction, country, device,
+ * prefetch detection, click insert, RPCs, edge cache writes, settings
+ * fetch — happens AFTER the response is returned, via scheduleBackground.
+ */
 
-// Cloudflare Workers `waitUntil` — resolved eagerly at module load.
+// ── Workers waitUntil (resolved eagerly) ───────────────────────────────────
 let waitUntilImpl: ((p: Promise<unknown>) => void) | null = null;
 const waitUntilReady: Promise<void> = (async () => {
   try {
@@ -13,7 +34,7 @@ const waitUntilReady: Promise<void> = (async () => {
 })();
 
 function scheduleBackground(p: Promise<unknown>): void {
-  // Fire-and-forget. Don't block the response.
+  // Fire-and-forget. The caller never awaits us.
   if (waitUntilImpl) {
     try {
       waitUntilImpl(p);
@@ -22,8 +43,6 @@ function scheduleBackground(p: Promise<unknown>): void {
       /* fall through */
     }
   }
-  // If waitUntil isn't ready yet, await its resolution then register.
-  // This still runs OFF the hot path because the caller doesn't await us.
   void (async () => {
     await waitUntilReady;
     if (waitUntilImpl) {
@@ -42,18 +61,18 @@ function scheduleBackground(p: Promise<unknown>): void {
   })();
 }
 
-// Edge cache. We serve stale entries instantly and revalidate in the background.
-const CACHE_TTL_SECONDS = 300; // fresh window (5min) — cache hit, no revalidation
-const CACHE_SWR_SECONDS = 86400; // entries up to 24h old still served; revalidated in background
+// ── Cache configuration ────────────────────────────────────────────────────
+const CACHE_TTL_SECONDS = 300; // fresh window — no revalidation
+const CACHE_SWR_SECONDS = 86_400; // stale window — served + revalidated
+
 const cacheKeyForSlug = (slug: string) =>
   new Request(`https://cache.internal/link/${encodeURIComponent(slug)}`);
 const SETTINGS_CACHE_KEY = new Request(
   "https://cache.internal/settings/default_waiting",
 );
 
-// ── In-memory isolate cache ────────────────────────────────────────────────
-// Workers isolates stay warm for many requests. Reading from a Map is ~µs vs
-// ~5–20ms for the edge Cache API. This is the single biggest hot-path win.
+// In-memory isolate cache. A warm isolate holds hundreds of slugs and serves
+// them in microseconds — this is the biggest single perf win.
 type MemEntry<T> = { value: T; storedAt: number };
 const MEM_MAX = 500;
 const memLinks = new Map<string, MemEntry<LinkRow | null>>();
@@ -62,7 +81,7 @@ const memSettings: { current: MemEntry<string | null> | null } = { current: null
 function memGet(slug: string): MemEntry<LinkRow | null> | null {
   const hit = memLinks.get(slug);
   if (!hit) return null;
-  // refresh LRU position
+  // LRU refresh
   memLinks.delete(slug);
   memLinks.set(slug, hit);
   return hit;
@@ -108,7 +127,6 @@ async function writeCacheEntry(key: Request, value: unknown) {
       new Response(JSON.stringify(entry), {
         headers: {
           "Content-Type": "application/json",
-          // Keep on edge for up to SWR window; we manage freshness ourselves.
           "Cache-Control": `public, max-age=${CACHE_SWR_SECONDS}, s-maxage=${CACHE_SWR_SECONDS}`,
         },
       }),
@@ -118,6 +136,7 @@ async function writeCacheEntry(key: Request, value: unknown) {
   }
 }
 
+/** Invalidate both layers of cache for a slug. Called from admin DELETE /r/$slug. */
 export async function purgeSlugCache(slug: string): Promise<boolean> {
   memLinks.delete(slug);
   const cache = getEdgeCache();
@@ -129,10 +148,12 @@ export async function purgeSlugCache(slug: string): Promise<boolean> {
   }
 }
 
+// ── Constants ──────────────────────────────────────────────────────────────
 const BOT_REGEX =
   /bot|crawler|spider|crawling|facebookexternalhit|slurp|bingpreview|whatsapp|telegram|discord|slack|linkedin|embedly|preview|fetch|monitor|curl|wget|python-requests|httpclient|axios|headless/i;
 
-const FALLBACK = "https://google.com";
+const DEVICE_REGEX = /mobile|android|iphone|ipad|ipod/i;
+const PREFETCH_REGEX = /prefetch|preview|prerender/i;
 
 type LinkRow = {
   id: string;
@@ -155,7 +176,7 @@ type LinkRow = {
 const LINK_COLUMNS =
   "id,mode,real_url,decoy_url,active,expires_at,click_limit,click_count,allowed_countries,blocked_ips,real_urls,ab_test,rotation_index,owner_only,owner_ips";
 
-// Raw PostgREST fetch — bypasses supabase-js overhead on the hot path.
+// Raw PostgREST — bypasses supabase-js for ~5ms savings on the cold miss path.
 function pgRest(path: string, init?: RequestInit): Promise<Response> {
   const url = process.env.SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -194,14 +215,15 @@ async function fetchDefaultWaiting(): Promise<string | null> {
   }
 }
 
+// ── Destination resolution (pure CPU, no I/O) ──────────────────────────────
 function pickDestination(
   link: LinkRow,
   defaultWaiting: string | null,
   isBot: boolean,
   ip: string,
-): { url: string; mode: string } {
-  const decoy = link.decoy_url || defaultWaiting || FALLBACK;
-  const waiting = defaultWaiting || link.decoy_url || FALLBACK;
+): { url: string | null; mode: string } {
+  const decoy = link.decoy_url || defaultWaiting || null;
+  const waiting = defaultWaiting || link.decoy_url || null;
 
   if (isBot) return { url: decoy, mode: "decoy:bot" };
   if (!link.active) return { url: decoy, mode: "decoy:inactive" };
@@ -239,36 +261,48 @@ function pickDestination(
   return { url: pool[0], mode: "real" };
 }
 
+function notFound(): Response {
+  return new Response("Not Found", {
+    status: 404,
+    headers: { "Cache-Control": "no-store", "X-Cache": "MISS" },
+  });
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// MAIN ENTRY
+// ───────────────────────────────────────────────────────────────────────────
 export async function handleRedirect(
   request: Request,
   slug: string,
 ): Promise<Response> {
-  const startTime = Date.now();
-  const url = new URL(request.url);
+  const t0 = Date.now();
   const linkCacheKey = cacheKeyForSlug(slug);
 
-  // 1. In-memory isolate cache (µs). Falls back to edge cache (ms), then DB.
+  // ═══════════════════════════════════════════════════════════════════════
+  // [HOT PATH] Step 1 — Resolve link from cache hierarchy
+  //   mem (µs)  →  edge cache (~5–20ms)  →  DB (cold miss only)
+  // ═══════════════════════════════════════════════════════════════════════
   let link: LinkRow | null = null;
-  let cacheStatus: "HIT" | "STALE" | "MISS" | "MEM" = "MISS";
+  let cacheStatus: "MEM" | "HIT" | "STALE" | "MISS" = "MISS";
   let revalidate = false;
-  let storedAt = 0;
 
   const mem = memGet(slug);
   if (mem) {
     link = mem.value;
-    storedAt = mem.storedAt;
-    const age = (Date.now() - storedAt) / 1000;
-    cacheStatus = age <= CACHE_TTL_SECONDS ? "MEM" : "STALE";
-    if (age > CACHE_TTL_SECONDS) revalidate = true;
+    const ageS = (Date.now() - mem.storedAt) / 1000;
+    if (ageS <= CACHE_TTL_SECONDS) {
+      cacheStatus = "MEM";
+    } else {
+      cacheStatus = "STALE";
+      revalidate = true;
+    }
   } else {
-    // Edge cache — serve stale instantly if present.
     const cached = await readCacheEntry<LinkRow | null>(linkCacheKey);
     if (cached) {
       link = cached.value;
-      storedAt = cached.storedAt;
-      memSet(slug, link); // promote to isolate memory
-      const age = (Date.now() - storedAt) / 1000;
-      if (age <= CACHE_TTL_SECONDS) {
+      memSet(slug, link); // promote into isolate memory
+      const ageS = (Date.now() - cached.storedAt) / 1000;
+      if (ageS <= CACHE_TTL_SECONDS) {
         cacheStatus = "HIT";
       } else {
         cacheStatus = "STALE";
@@ -277,13 +311,26 @@ export async function handleRedirect(
     }
   }
 
-  // 2. Cache miss → fetch ONLY the link. We never await settings on the hot
-  //    path; the waiting URL is fetched lazily and only if link.mode requires it.
+  // ═══════════════════════════════════════════════════════════════════════
+  // [COLD MISS FALLBACK] Step 2 — Only if no cache at all, hit Postgres.
+  //   One query, only the columns we need (LINK_COLUMNS).
+  //   Settings are NOT fetched here — only on demand for waiting/limit modes.
+  // ═══════════════════════════════════════════════════════════════════════
   if (cacheStatus === "MISS") {
     link = await fetchLink(slug);
     memSet(slug, link);
     scheduleBackground(writeCacheEntry(linkCacheKey, link));
-  } else if (revalidate) {
+  }
+
+  if (!link) {
+    // Unknown slug → fast 404. No tracking, no cache write of garbage.
+    return notFound();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // [CACHE REFRESH] Step 3 — SWR background refresh (never blocks 302).
+  // ═══════════════════════════════════════════════════════════════════════
+  if (revalidate) {
     scheduleBackground(
       (async () => {
         const fresh = await fetchLink(slug);
@@ -293,20 +340,34 @@ export async function handleRedirect(
     );
   }
 
-  if (!link) {
-    return Response.redirect(FALLBACK, 302);
-  }
+  // ═══════════════════════════════════════════════════════════════════════
+  // [HOT PATH] Step 4 — Minimal inline parsing for destination selection.
+  //   UA: regex on a short string (~µs)
+  //   IP: header read (~µs)
+  //   Everything else is deferred to background.
+  // ═══════════════════════════════════════════════════════════════════════
+  const ua = request.headers.get("user-agent") || "";
+  const isBot = BOT_REGEX.test(ua);
+  const ip =
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+    "";
 
-  // 3. Default waiting URL — only needed for waiting/limit modes.
+  // ═══════════════════════════════════════════════════════════════════════
+  // [HOT PATH] Step 5 — Settings on demand.
+  //   Only fetched when the link is in waiting mode OR hit click_limit.
+  //   Common real-redirect path never touches settings.
+  // ═══════════════════════════════════════════════════════════════════════
   let defaultWaiting: string | null = null;
-  if (
+  const needsSettings =
     link.mode === "waiting" ||
-    (link.click_limit !== null && link.click_count >= link.click_limit)
-  ) {
+    (link.click_limit !== null && link.click_count >= link.click_limit);
+
+  if (needsSettings) {
     if (memSettings.current) {
       defaultWaiting = memSettings.current.value;
-      const age = (Date.now() - memSettings.current.storedAt) / 1000;
-      if (age > CACHE_TTL_SECONDS) {
+      const ageS = (Date.now() - memSettings.current.storedAt) / 1000;
+      if (ageS > CACHE_TTL_SECONDS) {
         scheduleBackground(
           (async () => {
             const fresh = await fetchDefaultWaiting();
@@ -316,21 +377,16 @@ export async function handleRedirect(
         );
       }
     } else {
-      const cachedSettings = await readCacheEntry<string | null>(SETTINGS_CACHE_KEY);
+      const cachedSettings =
+        await readCacheEntry<string | null>(SETTINGS_CACHE_KEY);
       if (cachedSettings) {
         defaultWaiting = cachedSettings.value;
-        memSettings.current = { value: cachedSettings.value, storedAt: cachedSettings.storedAt };
-        const age = (Date.now() - cachedSettings.storedAt) / 1000;
-        if (age > CACHE_TTL_SECONDS) {
-          scheduleBackground(
-            (async () => {
-              const fresh = await fetchDefaultWaiting();
-              memSettings.current = { value: fresh, storedAt: Date.now() };
-              await writeCacheEntry(SETTINGS_CACHE_KEY, fresh);
-            })(),
-          );
-        }
+        memSettings.current = {
+          value: cachedSettings.value,
+          storedAt: cachedSettings.storedAt,
+        };
       } else {
+        // Absolute cold miss for settings — single DB hit, then cached forever (SWR).
         defaultWaiting = await fetchDefaultWaiting();
         memSettings.current = { value: defaultWaiting, storedAt: Date.now() };
         scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, defaultWaiting));
@@ -338,34 +394,9 @@ export async function handleRedirect(
     }
   }
 
-
-  const ua = request.headers.get("user-agent") || "";
-  const isBot = BOT_REGEX.test(ua);
-  const ip =
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    "";
-  const country = request.headers.get("cf-ipcountry") || null;
-  const device = /mobile|android|iphone|ipad|ipod/i.test(ua)
-    ? "mobile"
-    : "desktop";
-
-  // Prefetch / link-preview detection.
-  const purpose =
-    request.headers.get("purpose") ||
-    request.headers.get("x-purpose") ||
-    request.headers.get("sec-purpose") ||
-    "";
-  const isPrefetch =
-    /prefetch|preview|prerender/i.test(purpose) ||
-    request.headers.get("x-moz") === "prefetch" ||
-    (request.headers.get("sec-fetch-dest") === "empty" &&
-      request.headers.get("sec-fetch-mode") === "no-cors" &&
-      request.headers.get("sec-fetch-site") === "none");
-
-  const cfRay = request.headers.get("cf-ray") || "";
-  const skipTracking = isBot || isPrefetch;
-
+  // ═══════════════════════════════════════════════════════════════════════
+  // [HOT PATH] Step 6 — Pick destination (pure CPU, no I/O).
+  // ═══════════════════════════════════════════════════════════════════════
   const { url: destination, mode: modeAtClick } = pickDestination(
     link,
     defaultWaiting,
@@ -373,9 +404,16 @@ export async function handleRedirect(
     ip,
   );
 
-  const redirectMs = Date.now() - startTime;
+  if (!destination) {
+    // No real, decoy, or waiting URL configured — 404 instead of redirecting somewhere weird.
+    return notFound();
+  }
 
-  // 4. Build and return response IMMEDIATELY. All writes go to background.
+  const redirectMs = Date.now() - t0;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // [HOT PATH] Step 7 — RESPOND. Nothing below this line touches the response.
+  // ═══════════════════════════════════════════════════════════════════════
   const response = new Response(null, {
     status: 302,
     headers: {
@@ -386,15 +424,55 @@ export async function handleRedirect(
     },
   });
 
-  if (!skipTracking) {
+  // ═══════════════════════════════════════════════════════════════════════
+  // [BACKGROUND TRACKING] — Everything below runs AFTER the response is sent.
+  //   - URL parse + UTM extraction
+  //   - country / device / prefetch detection
+  //   - cf-ray dedup
+  //   - increment_link_click  RPC
+  //   - record_redirect_metrics RPC
+  //   - clicks insert
+  // ═══════════════════════════════════════════════════════════════════════
+  if (!isBot) {
     const linkId = link.id;
-    const utmSource = url.searchParams.get("utm_source");
-    const utmMedium = url.searchParams.get("utm_medium");
-    const utmCampaign = url.searchParams.get("utm_campaign");
+    const reqUrl = request.url;
+    const reqHeaders = request.headers;
+    const cfRay = reqHeaders.get("cf-ray") || "";
 
     scheduleBackground(
       (async () => {
-        // cf-ray dedup off the hot path
+        // Parse URL/UTMs off the hot path.
+        let utmSource: string | null = null;
+        let utmMedium: string | null = null;
+        let utmCampaign: string | null = null;
+        try {
+          const url = new URL(reqUrl);
+          utmSource = url.searchParams.get("utm_source");
+          utmMedium = url.searchParams.get("utm_medium");
+          utmCampaign = url.searchParams.get("utm_campaign");
+        } catch {
+          /* ignore */
+        }
+
+        const country = reqHeaders.get("cf-ipcountry") || null;
+        const device = DEVICE_REGEX.test(ua) ? "mobile" : "desktop";
+
+        // Prefetch / link-preview detection.
+        const purpose =
+          reqHeaders.get("purpose") ||
+          reqHeaders.get("x-purpose") ||
+          reqHeaders.get("sec-purpose") ||
+          "";
+        const isPrefetch =
+          PREFETCH_REGEX.test(purpose) ||
+          reqHeaders.get("x-moz") === "prefetch" ||
+          (reqHeaders.get("sec-fetch-dest") === "empty" &&
+            reqHeaders.get("sec-fetch-mode") === "no-cors" &&
+            reqHeaders.get("sec-fetch-site") === "none");
+
+        if (isPrefetch) return;
+
+        // cf-ray dedup (a single user-agent retry can fire the same ray).
         if (cfRay) {
           const cache = getEdgeCache();
           if (cache) {
@@ -413,6 +491,12 @@ export async function handleRedirect(
             }
           }
         }
+
+        // Lazy-load supabaseAdmin INSIDE background only — keeps it out of
+        // the hot path's import graph cost and isolate startup.
+        const { supabaseAdmin } = await import(
+          "@/integrations/supabase/client.server"
+        );
 
         await Promise.allSettled([
           supabaseAdmin.rpc("increment_link_click", { _link_id: linkId }),
