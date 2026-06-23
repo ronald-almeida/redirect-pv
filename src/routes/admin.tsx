@@ -1062,6 +1062,23 @@ function speedColor(ms: number): string {
   return "#ef4444";
 }
 
+function KpiCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="rounded-lg border border-white/5 bg-[#171717] p-5">
+      <p className="mb-1 text-xs uppercase tracking-widest text-neutral-500 font-['Space_Grotesk']">
+        {label}
+      </p>
+      <p
+        className={`font-['Space_Grotesk'] text-3xl font-bold tabular-nums ${
+          accent ? "text-[#A3E635]" : "text-[#FAFAFA]"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+
+
 function SpeedMonitor({
   last,
   avg,
