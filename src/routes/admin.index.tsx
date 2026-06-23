@@ -92,14 +92,15 @@ function formatRel(iso: string | null | undefined): string {
 }
 
 function buildSparkSeries(rows: ClickRow[], range: DateRange, buckets = 16): number[] {
-  if (!range.start || !range.end) return [];
+  if (!range.start) return [];
   const start = range.start.getTime();
-  const span = range.end.getTime() - start;
+  const endT = (range.end ?? new Date()).getTime();
+  const span = endT - start;
   if (span <= 0) return [];
   const out = new Array(buckets).fill(0);
   for (const r of rows) {
     const t = new Date(r.created_at).getTime();
-    if (t < start || t >= range.end.getTime()) continue;
+    if (t < start || t >= endT) continue;
     const idx = Math.min(buckets - 1, Math.floor(((t - start) / span) * buckets));
     out[idx]++;
   }
