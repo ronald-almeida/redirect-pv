@@ -378,7 +378,7 @@ function LinksPage() {
         {/* Metrics */}
         <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <MetricCard
-            label="Clicks totais"
+            label="Cliques no total"
             value={metrics.totalClicks.toLocaleString("pt-BR")}
             icon={MousePointerClick}
             series={metrics.totalSpark}

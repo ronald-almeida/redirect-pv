@@ -259,7 +259,7 @@ function LatencyPage() {
             </div>
           </Card>
 
-          <Card title="Cache hit ratio" subtitle="(MEM + HIT) / total" icon={Database}>
+          <Card title="Taxa de acerto do cache" subtitle="(MEM + HIT) / total" icon={Database}>
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={data.cacheRatio} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -272,7 +272,7 @@ function LatencyPage() {
                   <CartesianGrid stroke="#1C1C20" vertical={false} />
                   <XAxis dataKey="label" stroke="#3F3F46" tick={{ fontSize: 10, fill: "#71717A" }} />
                   <YAxis stroke="#3F3F46" tick={{ fontSize: 10, fill: "#71717A" }} width={28} domain={[0, 100]} />
-                  <Tooltip contentStyle={TooltipStyle} formatter={(v) => [`${v}%`, "Hit ratio"]} />
+                  <Tooltip contentStyle={TooltipStyle} formatter={(v) => [`${v}%`, "Taxa de acerto"]} />
                   <Area dataKey="ratio" stroke="#34D399" strokeWidth={1.75} fill="url(#g-ratio)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -299,7 +299,7 @@ function LatencyPage() {
         </Card>
 
         {/* Live probe */}
-        <Card title="Sonda de latência ao vivo" subtitle="20 requisições reais contra o slug selecionado" icon={Zap}>
+        <Card title="Teste de latência ao vivo" subtitle="20 requisições reais contra o slug selecionado" icon={Zap}>
           <div className="flex flex-wrap items-end gap-2 mb-3">
             <div className="flex-1 min-w-[200px]">
               <label className="text-[10.5px] uppercase tracking-wider text-muted-foreground">Slug</label>
