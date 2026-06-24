@@ -66,7 +66,7 @@ function SettingsPage() {
         <Tabs defaultValue="general" className="space-y-5">
           <TabsList className="bg-card border border-border h-9 p-0.5">
             <TabsTrigger value="general"  className="gap-1.5 text-[12.5px] data-[state=active]:bg-secondary"><Cog className="h-3.5 w-3.5" />Geral</TabsTrigger>
-            <TabsTrigger value="redirect" className="gap-1.5 text-[12.5px] data-[state=active]:bg-secondary"><SlidersHorizontal className="h-3.5 w-3.5" />Redirect</TabsTrigger>
+            <TabsTrigger value="redirect" className="gap-1.5 text-[12.5px] data-[state=active]:bg-secondary"><SlidersHorizontal className="h-3.5 w-3.5" />Redirecionamento</TabsTrigger>
             <TabsTrigger value="cache"    className="gap-1.5 text-[12.5px] data-[state=active]:bg-secondary"><Database className="h-3.5 w-3.5" />Cache</TabsTrigger>
             <TabsTrigger value="security" className="gap-1.5 text-[12.5px] data-[state=active]:bg-secondary"><ShieldCheck className="h-3.5 w-3.5" />Segurança</TabsTrigger>
             <TabsTrigger value="analytics" className="gap-1.5 text-[12.5px] data-[state=active]:bg-secondary"><BarChart3 className="h-3.5 w-3.5" />Analytics</TabsTrigger>
@@ -101,21 +101,21 @@ function SettingsPage() {
               </div>
             </Section>
 
-            <Section title="Comportamento do redirect" desc="Valores fixos do hot path (não editáveis em runtime).">
-              <Row label="Tipo de resposta" value="HTTP 302 imediato" />
-              <Row label="Cache-Control" value="no-store (cliente) / public 86400s (cache interno)" mono />
-              <Row label="Server-Timing" value="redirect;dur=&lt;ms&gt; — base para latência real" mono />
-              <Row label="Tracking" value="fetch keepalive, fire-and-forget (não bloqueia 302)" />
+            <Section title="Comportamento do redirecionamento" desc="Valores fixos do caminho rápido (não editáveis em runtime).">
+              <Row label="Tipo de resposta" value="Redirecionamento 302 imediato" />
+              <Row label="Controle de cache" value="no-store (navegador) / público 86400s (cache interno)" mono />
+              <Row label="Server-Timing" value="redirect;dur=&lt;ms&gt; — base para a latência real" mono />
+              <Row label="Rastreamento" value="fetch keepalive em segundo plano (não bloqueia o 302)" />
             </Section>
           </TabsContent>
 
           {/* CACHE */}
           <TabsContent value="cache" className="space-y-3">
-            <Section title="Estratégia de cache" desc="Configuração do redirect-handler (lib/redirect-handler.ts).">
-              <Row label="Camada MEM" value="Isolate in-memory · TTL ~30s" />
-              <Row label="Camada Edge (caches.default)" value="TTL 24h · chave por hostname da zona" mono />
-              <Row label="Revalidação" value="SWR — STALE serve, refresh em background" />
-              <Row label="Invalidação" value="DELETE /r/&lt;slug&gt; purga ambas as camadas" mono />
+            <Section title="Estratégia de cache" desc="Configuração interna do redirecionador.">
+              <Row label="Camada em memória" value="Isolate em memória · TTL ~30s" />
+              <Row label="Camada de borda" value="TTL 24h · chave por hostname da zona" mono />
+              <Row label="Revalidação" value="SWR — entrega imediata e atualização em segundo plano" />
+              <Row label="Invalidação" value="DELETE /r/&lt;slug&gt; limpa as duas camadas" mono />
             </Section>
             <Section title="Limpeza global" desc="Força refresh de todos os slugs imediatamente.">
               <Button variant="outline" onClick={() => void purgeAllCache()} disabled={purging} className="gap-1.5">
@@ -151,13 +151,13 @@ function SettingsPage() {
           {/* ANALYTICS */}
           <TabsContent value="analytics" className="space-y-3">
             <Section title="Coleta" desc="Como os cliques são armazenados.">
-              <Row label="Fonte" value="Tabela clicks (insert fire-and-forget no hot path)" mono />
+              <Row label="Fonte" value="Tabela de cliques (registro em segundo plano no caminho rápido)" mono />
               <Row label="Campos" value="link_id, mode_at_click, cache_status, redirect_ms, country, device, utm_*" mono />
-              <Row label="Filtros" value="Bots e prefetch são ignorados antes do insert" />
+              <Row label="Filtros" value="Bots e prefetch são ignorados antes do registro" />
             </Section>
             <Section title="Retenção" desc="Política atual (informativa).">
-              <Row label="clicks" value="Sem expiração automática · purga manual" />
-              <Row label="settings" value="Linha única · sem versionamento" />
+              <Row label="Cliques" value="Sem expiração automática · limpeza manual" />
+              <Row label="Configurações" value="Linha única · sem versionamento" />
             </Section>
           </TabsContent>
         </Tabs>

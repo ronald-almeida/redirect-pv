@@ -9,6 +9,7 @@ import { AdminShell, type AdminPeriod } from "@/components/admin/AdminShell";
 import { rangeForPreset, type DateRange } from "@/lib/date-range";
 import { type ClickRow, aggregate, countryFlag, topEntries } from "@/lib/analytics";
 import { TrendingUp, Globe, Smartphone, Monitor } from "lucide-react";
+import { IndividualClicks } from "@/components/admin/IndividualClicks";
 
 export const Route = createFileRoute("/admin/analytics")({
   head: () => ({ meta: [{ title: "Analytics · CloakPanel" }] }),
@@ -316,6 +317,14 @@ function AnalyticsPage() {
               </div>
             )}
           </Card>
+        </section>
+
+        {/* Individual clicks */}
+        <section>
+          <IndividualClicks
+            startIso={(range.start ?? new Date(0)).toISOString()}
+            endIso={(range.end ?? new Date()).toISOString()}
+          />
         </section>
       </div>
     </AdminShell>
