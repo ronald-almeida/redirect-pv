@@ -336,17 +336,56 @@ export async function handleRedirect(
   // ═══════════════════════════════════════════════════════════════════════
   // [COLD MISS FALLBACK] Step 2 — Only if no cache at all, hit Postgres.
   //   One query, only the columns we need (LINK_COLUMNS).
-  //   Settings are NOT fetched here — only on demand for waiting/limit modes.
+  //   Hard timeout: AbortSignal at 800ms — never let DB hang the redirect.
+  //   Soft timeout: race against 400ms — beyond that, redirect the user to
+  //   the default waiting URL while the DB lookup keeps going in background
+  //   and primes the cache for the next hit.
   // ═══════════════════════════════════════════════════════════════════════
+  let coldMissSoftFailed = false;
   if (cacheStatus === "MISS") {
-    link = await fetchLink(slug);
-    memSet(slug, link);
-    scheduleBackground(writeCacheEntry(linkCacheKey, link));
+    const ac = new AbortController();
+    const hardTimer = setTimeout(() => ac.abort(), COLD_MISS_HARD_TIMEOUT_MS);
+    const dbPromise = fetchLink(slug, ac.signal).then((row) => {
+      memSet(slug, row);
+      scheduleBackground(writeCacheEntry(linkCacheKey, row));
+      return row;
+    });
+    const winner = await Promise.race([
+      dbPromise,
+      new Promise<"__soft_timeout__">((resolve) =>
+        setTimeout(() => resolve("__soft_timeout__"), COLD_MISS_SOFT_TIMEOUT_MS),
+      ),
+    ]);
+    clearTimeout(hardTimer);
+    if (winner === "__soft_timeout__") {
+      coldMissSoftFailed = true;
+      // Keep the DB call alive so the cache warms up for the next hit.
+      scheduleBackground(dbPromise.catch(() => null));
+    } else {
+      link = winner;
+    }
   }
 
-  if (!link) {
+  if (!link && !coldMissSoftFailed) {
     // Unknown slug → fast 404. No tracking, no cache write of garbage.
     return notFound();
+  }
+
+  // Soft-timeout fallback: send the user to the default waiting URL while the
+  // DB query finishes in the background and primes the cache.
+  if (coldMissSoftFailed) {
+    const fallback = (await fetchDefaultWaiting()) || "about:blank";
+    const ms = Date.now() - t0;
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: fallback,
+        "Cache-Control": "no-store",
+        "X-Cache": "MISS",
+        "X-Fallback": "soft-timeout",
+        "Server-Timing": `redirect;dur=${ms}`,
+      },
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════
