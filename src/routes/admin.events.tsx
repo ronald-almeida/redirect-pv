@@ -28,6 +28,7 @@ interface Event {
   ts: string;
   kind: EventKind;
   slug: string;
+  linkName?: string | null;
   mode?: string | null;
   detail: string;
   user: string;
@@ -44,11 +45,11 @@ interface ClickRow {
 interface LinkRow {
   id: string;
   slug: string;
+  name: string | null;
   mode: string;
   click_limit: number | null;
   click_count: number;
   created_at: string;
-  // Some schemas don't have updated_at — handled via optional.
 }
 
 const KIND_META: Record<EventKind, { label: string; icon: React.ComponentType<{ className?: string }>; tone: "info" | "success" | "warning" | "danger" }> = {
@@ -85,7 +86,7 @@ function EventsPage() {
     if (!range.start) return;
     const endIso = (range.end ?? new Date()).toISOString();
     const [linksRes, clicksRes] = await Promise.all([
-      supabase.from("links").select("id, slug, mode, click_limit, click_count, created_at"),
+      supabase.from("links").select("id, slug, name, mode, click_limit, click_count, created_at"),
       supabase.from("clicks")
         .select("id, link_id, mode_at_click, cache_status, redirect_ms, created_at")
         .gte("created_at", range.start.toISOString())
@@ -105,13 +106,13 @@ function EventsPage() {
       if (t >= range.start.getTime() && t < (range.end ?? new Date()).getTime()) {
         ev.push({
           id: `lc-${l.id}`, ts: l.created_at, kind: "link_created",
-          slug: l.slug, mode: l.mode, detail: `Slug /${l.slug} criado em modo ${l.mode}`, user: "system",
+          slug: l.slug, linkName: l.name, mode: l.mode, detail: `Slug /${l.slug} criado em modo ${l.mode}`, user: "system",
         });
       }
       if (l.click_limit && l.click_count >= l.click_limit) {
         ev.push({
           id: `lim-${l.id}`, ts: l.created_at, kind: "limit_reached",
-          slug: l.slug, mode: l.mode, detail: `Limite de ${l.click_limit} cliques atingido`, user: "system",
+          slug: l.slug, linkName: l.name, mode: l.mode, detail: `Limite de ${l.click_limit} cliques atingido`, user: "system",
         });
       }
     }
@@ -120,26 +121,27 @@ function EventsPage() {
     for (const c of clicks) {
       const link = linkMap.get(c.link_id);
       const slug = link?.slug ?? c.link_id.slice(0, 6);
+      const linkName = link?.name ?? null;
       const ms = c.redirect_ms ?? 0;
       const baseMode = c.mode_at_click.split(":")[0];
 
       if (ms > 500) {
         ev.push({
           id: `rs-${c.id}`, ts: c.created_at, kind: "redirect_slow",
-          slug, mode: baseMode, user: "anônimo",
+          slug, linkName, mode: baseMode, user: "anônimo",
           detail: `Redirect levou ${ms}ms · cache ${c.cache_status ?? "—"}`,
         });
       } else {
         ev.push({
           id: `r-${c.id}`, ts: c.created_at, kind: "redirect",
-          slug, mode: baseMode, user: "anônimo",
+          slug, linkName, mode: baseMode, user: "anônimo",
           detail: `${ms}ms · cache ${c.cache_status ?? "—"} · mode ${baseMode}`,
         });
       }
       if (baseMode === "waiting") {
         ev.push({
           id: `wa-${c.id}`, ts: c.created_at, kind: "waiting_activated",
-          slug, mode: baseMode, user: "system",
+          slug, linkName, mode: baseMode, user: "system",
           detail: `Modo espera ativo: link sem destino real configurado`,
         });
       }
@@ -200,7 +202,7 @@ function EventsPage() {
                   <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <th className="px-4 py-2.5 w-44">Data/Hora</th>
                     <th className="px-3 py-2.5 w-44">Evento</th>
-                    <th className="px-3 py-2.5">Slug</th>
+                    <th className="px-3 py-2.5">Link</th>
                     <th className="px-3 py-2.5 w-24">Tipo</th>
                     <th className="px-3 py-2.5">Detalhes</th>
                     <th className="px-3 py-2.5 w-24">Usuário</th>
@@ -220,7 +222,16 @@ function EventsPage() {
                             {meta.label}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 font-mono">/{e.slug}</td>
+                        <td className="px-3 py-2.5">
+                          {e.linkName ? (
+                            <div className="flex flex-col leading-tight">
+                              <span className="text-[13px] font-bold text-primary">{e.linkName}</span>
+                              <span className="font-mono text-[10.5px] text-muted-foreground">/{e.slug}</span>
+                            </div>
+                          ) : (
+                            <span className="font-mono text-[12px]">/{e.slug}</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2.5">
                           {e.mode && (
                             <StatusBadge
