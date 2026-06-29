@@ -28,6 +28,7 @@ interface Event {
   ts: string;
   kind: EventKind;
   slug: string;
+  linkName?: string | null;
   mode?: string | null;
   detail: string;
   user: string;
@@ -44,11 +45,11 @@ interface ClickRow {
 interface LinkRow {
   id: string;
   slug: string;
+  name: string | null;
   mode: string;
   click_limit: number | null;
   click_count: number;
   created_at: string;
-  // Some schemas don't have updated_at — handled via optional.
 }
 
 const KIND_META: Record<EventKind, { label: string; icon: React.ComponentType<{ className?: string }>; tone: "info" | "success" | "warning" | "danger" }> = {
