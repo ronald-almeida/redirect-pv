@@ -579,9 +579,10 @@ function LinksPage() {
                               <button
                                 onClick={() => setEditing(l)}
                                 title="Editar"
-                                className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11.5px] font-semibold text-primary transition-all hover:bg-primary/20 hover:border-primary/60 hover:shadow-[0_0_12px_-2px_rgba(163,230,53,0.55)]"
                               >
                                 <Settings2 className="h-3.5 w-3.5" />
+                                Editar
                               </button>
                               <Link
                                 to="/admin/analytics"
