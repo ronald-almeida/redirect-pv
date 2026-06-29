@@ -435,8 +435,8 @@ function LinksPage() {
               </div>
             </div>
 
-            {/* type chips */}
-            <div className="flex flex-wrap items-center gap-2">
+            {/* type segmented control */}
+            <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-secondary/60 p-0.5 w-fit">
               {([
                 { k: "all", l: "Todos" },
                 { k: "real", l: "Real" },
@@ -447,10 +447,10 @@ function LinksPage() {
                   key={k}
                   onClick={() => { setTypeFilter(k); setPage(1); }}
                   className={cn(
-                    "rounded-full px-3.5 py-1.5 text-[11.5px] font-semibold transition-all",
+                    "rounded-full px-4 py-1.5 text-[11.5px] font-semibold transition-all",
                     typeFilter === k
-                      ? "bg-primary text-primary-foreground shadow-[0_0_18px_-4px_rgba(163,230,53,0.7)] border border-primary"
-                      : "border border-border bg-transparent text-muted-foreground hover:text-foreground hover:border-foreground/30",
+                      ? "bg-primary text-primary-foreground shadow-[0_2px_10px_-2px_rgba(163,230,53,0.55)]"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {l}
