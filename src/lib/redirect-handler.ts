@@ -207,10 +207,11 @@ function pgRest(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-async function fetchLink(slug: string): Promise<LinkRow | null> {
+async function fetchLink(slug: string, signal?: AbortSignal): Promise<LinkRow | null> {
   try {
     const r = await pgRest(
       `links?slug=eq.${encodeURIComponent(slug)}&select=${LINK_COLUMNS}&limit=1`,
+      { signal },
     );
     if (!r.ok) return null;
     return (await r.json()) as LinkRow;
