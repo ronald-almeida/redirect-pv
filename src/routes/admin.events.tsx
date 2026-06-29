@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminShell, type AdminPeriod } from "@/components/admin/AdminShell";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { rangeForPreset, type DateRange } from "@/lib/date-range";
+import { type DateRange } from "@/lib/date-range";
+import { adminPeriodToRange } from "@/lib/admin-period";
 import {
   MousePointerClick, Plus, Pencil, Trash2, AlertTriangle, FileSearch, Clock, Activity,
 } from "lucide-react";
@@ -14,15 +15,8 @@ export const Route = createFileRoute("/admin/events")({
   component: EventsPage,
 });
 
-function periodToRange(p: AdminPeriod): DateRange {
-  if (p === "24h") return rangeForPreset("today");
-  if (p === "7d") return rangeForPreset("7d");
-  if (p === "30d") return rangeForPreset("30d");
-  const end = new Date();
-  const start = new Date(end);
-  start.setDate(start.getDate() - 90);
-  return { start, end, preset: "custom" };
-}
+
+
 
 type EventKind =
   | "link_created" | "link_updated" | "link_deleted"
@@ -76,12 +70,14 @@ const TONE: Record<"info" | "success" | "warning" | "danger", string> = {
 };
 
 function EventsPage() {
-  const [period, setPeriod] = useState<AdminPeriod>("24h");
+  const [period, setPeriod] = useState<AdminPeriod>("today");
+  const [customStart, setCustomStart] = useState<string>("");
+  const [customEnd, setCustomEnd] = useState<string>("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<EventKind | "all">("all");
   const [events, setEvents] = useState<Event[]>([]);
 
-  const range = useMemo(() => periodToRange(period), [period]);
+  const range = useMemo<DateRange>(() => adminPeriodToRange(period, customStart, customEnd), [period, customStart, customEnd]);
 
   useEffect(() => { void load(); }, [range.start?.getTime()]);
 
@@ -169,7 +165,7 @@ function EventsPage() {
   }, [events]);
 
   return (
-    <AdminShell period={period} onPeriod={setPeriod} search={search} onSearch={setSearch}>
+    <AdminShell period={period} onPeriod={setPeriod} customStart={customStart} customEnd={customEnd} onCustomRange={(s, e) => { setCustomStart(s); setCustomEnd(e); }} search={search} onSearch={setSearch}>
       <div className="px-4 md:px-6 py-6 space-y-5">
         {/* Filter chips */}
         <div className="flex flex-wrap gap-1.5">

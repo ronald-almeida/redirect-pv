@@ -6,7 +6,8 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminShell, type AdminPeriod } from "@/components/admin/AdminShell";
-import { rangeForPreset, type DateRange } from "@/lib/date-range";
+import { type DateRange } from "@/lib/date-range";
+import { adminPeriodToRange } from "@/lib/admin-period";
 import { type ClickRow, aggregate, countryFlag, topEntries } from "@/lib/analytics";
 import { TrendingUp, Globe, Smartphone, Monitor } from "lucide-react";
 import { IndividualClicks } from "@/components/admin/IndividualClicks";
@@ -16,15 +17,8 @@ export const Route = createFileRoute("/admin/analytics")({
   component: AnalyticsPage,
 });
 
-function periodToRange(p: AdminPeriod): DateRange {
-  if (p === "24h") return rangeForPreset("today");
-  if (p === "7d") return rangeForPreset("7d");
-  if (p === "30d") return rangeForPreset("30d");
-  const end = new Date();
-  const start = new Date(end);
-  start.setDate(start.getDate() - 90);
-  return { start, end, preset: "custom" };
-}
+
+
 
 interface LinkLite { id: string; slug: string; name: string | null }
 
@@ -45,11 +39,13 @@ const TooltipStyle = {
 
 function AnalyticsPage() {
   const [period, setPeriod] = useState<AdminPeriod>("7d");
+  const [customStart, setCustomStart] = useState<string>("");
+  const [customEnd, setCustomEnd] = useState<string>("");
   const [clicks, setClicks] = useState<ClickRow[]>([]);
   const [links, setLinks] = useState<LinkLite[]>([]);
   const [latency, setLatency] = useState<{ created_at: string; redirect_ms: number | null }[]>([]);
 
-  const range = useMemo(() => periodToRange(period), [period]);
+  const range = useMemo<DateRange>(() => adminPeriodToRange(period, customStart, customEnd), [period, customStart, customEnd]);
 
   useEffect(() => { void load(); }, [range.start?.getTime()]);
 
@@ -147,7 +143,7 @@ function AnalyticsPage() {
   }, [clicks, latency, links, range.start, range.end]);
 
   return (
-    <AdminShell period={period} onPeriod={setPeriod}>
+    <AdminShell period={period} onPeriod={setPeriod} customStart={customStart} customEnd={customEnd} onCustomRange={(s, e) => { setCustomStart(s); setCustomEnd(e); }}>
       <div className="px-4 md:px-6 py-6 space-y-5">
         {/* Top row */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">

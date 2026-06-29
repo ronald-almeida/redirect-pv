@@ -26,7 +26,7 @@ export function MetricCard({ label, value, delta, icon: Icon, series, accent = "
   const data = (series ?? []).map((v, i) => ({ i, v }));
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 transition-colors hover:border-border/80">
+    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-[0_0_0_1px_rgba(163,230,53,0.08),0_20px_40px_-20px_rgba(0,0,0,0.6)]">
       {/* subtle radial glow in background */}
       <div
         aria-hidden

@@ -33,7 +33,8 @@ import {
   CartesianGrid, Tooltip,
 } from "recharts";
 import { type ClickRow, type LinkAgg, aggregate } from "@/lib/analytics";
-import { rangeForPreset, type DateRange } from "@/lib/date-range";
+import { type DateRange } from "@/lib/date-range";
+import { adminPeriodToRange } from "@/lib/admin-period";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/")({
@@ -69,26 +70,17 @@ const DEFAULTS = {
 };
 
 const PERIOD_SHORT: Record<AdminPeriod, string> = {
-  "24h": "Hoje",
+  today: "Hoje",
+  yesterday: "Ontem",
   "7d": "7 dias",
   "30d": "30 dias",
-  "90d": "90 dias",
+  custom: "Período",
 };
 
 const purgeEdgeCache = (slug: string) => {
   fetch(`/r/${encodeURIComponent(slug)}`, { method: "DELETE" }).catch(() => {});
 };
 
-function periodToRange(p: AdminPeriod): DateRange {
-  if (p === "24h") return rangeForPreset("today");
-  if (p === "7d") return rangeForPreset("7d");
-  if (p === "30d") return rangeForPreset("30d");
-  // 90d → return start ~90 days ago
-  const end = new Date();
-  const start = new Date(end);
-  start.setDate(start.getDate() - 90);
-  return { start, end, preset: "custom" };
-}
 
 function formatRel(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -125,6 +117,8 @@ function LinksPage() {
   const [latencyByCache, setLatencyByCache] = useState<Record<string, string | null>>({});
   const [search, setSearch] = useState("");
   const [period, setPeriod] = useState<AdminPeriod>("7d");
+  const [customStart, setCustomStart] = useState<string>("");
+  const [customEnd, setCustomEnd] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
   const [newSlug, setNewSlug] = useState("");
   const [origin, setOrigin] = useState("");
@@ -134,7 +128,7 @@ function LinksPage() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  const range = useMemo(() => periodToRange(period), [period]);
+  const range = useMemo<DateRange>(() => adminPeriodToRange(period, customStart, customEnd), [period, customStart, customEnd]);
 
   useEffect(() => {
     setOrigin(typeof window !== "undefined" ? window.location.origin : "");
@@ -365,18 +359,21 @@ function LinksPage() {
     <AdminShell
       period={period}
       onPeriod={setPeriod}
+      customStart={customStart}
+      customEnd={customEnd}
+      onCustomRange={(s, e) => { setCustomStart(s); setCustomEnd(e); }}
     >
-      <div className="px-4 md:px-8 py-7 space-y-6 max-w-[1480px]">
+      <div className="px-4 md:px-10 py-9 space-y-8 max-w-[1480px]">
         {/* Page header */}
-        <header className="flex items-end justify-between gap-4">
+        <header className="flex items-end justify-between gap-4 border-b border-border/60 pb-6">
           <div>
-            <h1 className="text-[34px] font-semibold tracking-tight leading-none">Visão Geral</h1>
-            <p className="mt-2 text-[13.5px] text-muted-foreground">Acompanhe o desempenho dos seus links em tempo real</p>
+            <h1 className="text-[40px] font-bold tracking-tight leading-[1.05]">Visão Geral</h1>
+            <p className="mt-2.5 text-[14px] text-muted-foreground/80 font-light">Acompanhe o desempenho dos seus links em tempo real</p>
           </div>
         </header>
 
         {/* Metrics */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
           <MetricCard
             label="Cliques no total"
             value={metrics.totalClicks.toLocaleString("pt-BR")}
@@ -450,10 +447,10 @@ function LinksPage() {
                   key={k}
                   onClick={() => { setTypeFilter(k); setPage(1); }}
                   className={cn(
-                    "rounded-full border px-3 py-1 text-[11.5px] font-medium transition-colors",
+                    "rounded-full px-3.5 py-1.5 text-[11.5px] font-semibold transition-all",
                     typeFilter === k
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-border bg-transparent text-muted-foreground hover:text-foreground hover:bg-secondary",
+                      ? "bg-primary text-primary-foreground shadow-[0_0_18px_-4px_rgba(163,230,53,0.7)] border border-primary"
+                      : "border border-border bg-transparent text-muted-foreground hover:text-foreground hover:border-foreground/30",
                   )}
                 >
                   {l}
@@ -477,19 +474,19 @@ function LinksPage() {
             <>
               <div className="overflow-x-auto">
                 <table className="w-full text-[12.5px]">
-                  <thead>
-                    <tr className="text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      <th className="px-5 py-3 font-semibold">Link</th>
-                      <th className="px-3 py-3 font-semibold">Status</th>
-                      <th className="px-3 py-3 font-semibold">Tipo</th>
-                      <th className="px-3 py-3 font-semibold text-center">Real</th>
-                      <th className="px-3 py-3 font-semibold text-center">Isca</th>
-                      <th className="px-3 py-3 font-semibold text-center">Espera</th>
-                      <th className="px-3 py-3 font-semibold text-right">Última<br/>latência</th>
-                      <th className="px-3 py-3 font-semibold">Média</th>
-                      <th className="px-3 py-3 font-semibold">Último<br/>acesso</th>
-                      <th className="px-3 py-3 font-semibold">Cache</th>
-                      <th className="px-3 py-3 font-semibold text-right">Ações</th>
+                  <thead className="bg-secondary/30">
+                    <tr className="text-left text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
+                      <th className="px-5 py-3.5 font-semibold">Link</th>
+                      <th className="px-4 py-3.5 font-semibold">Status</th>
+                      <th className="px-4 py-3.5 font-semibold">Tipo</th>
+                      <th className="px-4 py-3.5 font-semibold text-center">Real</th>
+                      <th className="px-4 py-3.5 font-semibold text-center">Isca</th>
+                      <th className="px-4 py-3.5 font-semibold text-center">Espera</th>
+                      <th className="px-4 py-3.5 font-semibold text-right">Última<br/>latência</th>
+                      <th className="px-4 py-3.5 font-semibold">Média</th>
+                      <th className="px-4 py-3.5 font-semibold">Último<br/>acesso</th>
+                      <th className="px-4 py-3.5 font-semibold">Cache</th>
+                      <th className="px-4 py-3.5 font-semibold text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -512,7 +509,7 @@ function LinksPage() {
                       const sparkData = buildSparkSeries(linkClicks, range, 14).map((v, i) => ({ i, v }));
 
                       return (
-                        <tr key={l.id} className="group border-t border-border hover:bg-secondary/40 transition-colors">
+                        <tr key={l.id} className="group border-t border-border/60 odd:bg-transparent even:bg-secondary/20 hover:bg-primary/[0.04] hover:shadow-[inset_3px_0_0_0_rgba(163,230,53,0.55)] transition-all">
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
                               <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", accent.tile, accent.ring)}>
