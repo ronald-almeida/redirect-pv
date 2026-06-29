@@ -38,7 +38,7 @@ const TooltipStyle = {
 };
 
 function AnalyticsPage() {
-  const [period, setPeriod] = useState<AdminPeriod>("7d");
+  const [period, setPeriod] = useState<AdminPeriod>("today");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
   const [clicks, setClicks] = useState<ClickRow[]>([]);

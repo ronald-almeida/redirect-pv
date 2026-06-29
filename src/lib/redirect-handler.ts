@@ -62,8 +62,10 @@ function scheduleBackground(p: Promise<unknown>): void {
 }
 
 // ── Cache configuration ────────────────────────────────────────────────────
-const CACHE_TTL_SECONDS = 300; // fresh window — no revalidation
-const CACHE_SWR_SECONDS = 86_400; // stale window — served + revalidated
+const CACHE_TTL_SECONDS = 3_600; // fresh window — no revalidation (1h)
+const CACHE_SWR_SECONDS = 86_400; // stale window — served + revalidated (24h)
+const COLD_MISS_HARD_TIMEOUT_MS = 800; // abort DB if slower than this
+const COLD_MISS_SOFT_TIMEOUT_MS = 400; // fall back to waiting URL beyond this
 
 // CRITICAL: Cloudflare Workers' caches.default REQUIRES the cache key URL to use
 // a hostname owned by the zone. Synthetic hosts (cache.internal) cause put() to
@@ -205,10 +207,11 @@ function pgRest(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-async function fetchLink(slug: string): Promise<LinkRow | null> {
+async function fetchLink(slug: string, signal?: AbortSignal): Promise<LinkRow | null> {
   try {
     const r = await pgRest(
       `links?slug=eq.${encodeURIComponent(slug)}&select=${LINK_COLUMNS}&limit=1`,
+      { signal },
     );
     if (!r.ok) return null;
     return (await r.json()) as LinkRow;
@@ -333,12 +336,51 @@ export async function handleRedirect(
   // ═══════════════════════════════════════════════════════════════════════
   // [COLD MISS FALLBACK] Step 2 — Only if no cache at all, hit Postgres.
   //   One query, only the columns we need (LINK_COLUMNS).
-  //   Settings are NOT fetched here — only on demand for waiting/limit modes.
+  //   Hard timeout: AbortSignal at 800ms — never let DB hang the redirect.
+  //   Soft timeout: race against 400ms — beyond that, redirect the user to
+  //   the default waiting URL while the DB lookup keeps going in background
+  //   and primes the cache for the next hit.
   // ═══════════════════════════════════════════════════════════════════════
+  let coldMissSoftFailed = false;
   if (cacheStatus === "MISS") {
-    link = await fetchLink(slug);
-    memSet(slug, link);
-    scheduleBackground(writeCacheEntry(linkCacheKey, link));
+    const ac = new AbortController();
+    const hardTimer = setTimeout(() => ac.abort(), COLD_MISS_HARD_TIMEOUT_MS);
+    const dbPromise = fetchLink(slug, ac.signal).then((row) => {
+      memSet(slug, row);
+      scheduleBackground(writeCacheEntry(linkCacheKey, row));
+      return row;
+    });
+    const winner = await Promise.race([
+      dbPromise,
+      new Promise<"__soft_timeout__">((resolve) =>
+        setTimeout(() => resolve("__soft_timeout__"), COLD_MISS_SOFT_TIMEOUT_MS),
+      ),
+    ]);
+    clearTimeout(hardTimer);
+    if (winner === "__soft_timeout__") {
+      coldMissSoftFailed = true;
+      // Keep the DB call alive so the cache warms up for the next hit.
+      scheduleBackground(dbPromise.catch(() => null));
+    } else {
+      link = winner;
+    }
+  }
+
+  // Soft-timeout fallback: send the user to the default waiting URL while the
+  // DB query finishes in the background and primes the cache.
+  if (coldMissSoftFailed) {
+    const fallback = (await fetchDefaultWaiting()) || "about:blank";
+    const ms = Date.now() - t0;
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: fallback,
+        "Cache-Control": "no-store",
+        "X-Cache": "MISS",
+        "X-Fallback": "soft-timeout",
+        "Server-Timing": `redirect;dur=${ms}`,
+      },
+    });
   }
 
   if (!link) {

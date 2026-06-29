@@ -116,7 +116,7 @@ function LinksPage() {
   const [clicks, setClicks] = useState<ClickRow[]>([]);
   const [latencyByCache, setLatencyByCache] = useState<Record<string, string | null>>({});
   const [search, setSearch] = useState("");
-  const [period, setPeriod] = useState<AdminPeriod>("7d");
+  const [period, setPeriod] = useState<AdminPeriod>("today");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -435,8 +435,8 @@ function LinksPage() {
               </div>
             </div>
 
-            {/* type chips */}
-            <div className="flex flex-wrap items-center gap-2">
+            {/* type segmented control */}
+            <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-secondary/60 p-0.5 w-fit">
               {([
                 { k: "all", l: "Todos" },
                 { k: "real", l: "Real" },
@@ -447,10 +447,10 @@ function LinksPage() {
                   key={k}
                   onClick={() => { setTypeFilter(k); setPage(1); }}
                   className={cn(
-                    "rounded-full px-3.5 py-1.5 text-[11.5px] font-semibold transition-all",
+                    "rounded-full px-4 py-1.5 text-[11.5px] font-semibold transition-all",
                     typeFilter === k
-                      ? "bg-primary text-primary-foreground shadow-[0_0_18px_-4px_rgba(163,230,53,0.7)] border border-primary"
-                      : "border border-border bg-transparent text-muted-foreground hover:text-foreground hover:border-foreground/30",
+                      ? "bg-primary text-primary-foreground shadow-[0_2px_10px_-2px_rgba(163,230,53,0.55)]"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {l}
@@ -579,9 +579,10 @@ function LinksPage() {
                               <button
                                 onClick={() => setEditing(l)}
                                 title="Editar"
-                                className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11.5px] font-semibold text-primary transition-all hover:bg-primary/20 hover:border-primary/60 hover:shadow-[0_0_12px_-2px_rgba(163,230,53,0.55)]"
                               >
                                 <Settings2 className="h-3.5 w-3.5" />
+                                Editar
                               </button>
                               <Link
                                 to="/admin/analytics"
