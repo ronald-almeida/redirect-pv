@@ -366,11 +366,6 @@ export async function handleRedirect(
     }
   }
 
-  if (!link && !coldMissSoftFailed) {
-    // Unknown slug → fast 404. No tracking, no cache write of garbage.
-    return notFound();
-  }
-
   // Soft-timeout fallback: send the user to the default waiting URL while the
   // DB query finishes in the background and primes the cache.
   if (coldMissSoftFailed) {
@@ -386,6 +381,11 @@ export async function handleRedirect(
         "Server-Timing": `redirect;dur=${ms}`,
       },
     });
+  }
+
+  if (!link) {
+    // Unknown slug → fast 404. No tracking, no cache write of garbage.
+    return notFound();
   }
 
   // ═══════════════════════════════════════════════════════════════════════
