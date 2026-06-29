@@ -287,8 +287,17 @@ function LinksPage() {
 
   const handleDelete = async (l: LinkRow) => {
     if (!confirm(`Excluir /${l.slug}?`)) return;
-    await supabase.from("links").delete().eq("id", l.id);
+    const prev = links;
+    setLinks((cur) => cur.filter((x) => x.id !== l.id));
+    const { error } = await supabase.from("links").delete().eq("id", l.id);
+    if (error) {
+      console.error("[delete link]", error);
+      alert(`Falha ao excluir: ${error.message}`);
+      setLinks(prev);
+      return;
+    }
     purgeEdgeCache(l.slug);
+    void loadLinks();
   };
 
   const handleDuplicate = async (l: LinkRow) => {
