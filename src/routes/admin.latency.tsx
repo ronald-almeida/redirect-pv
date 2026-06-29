@@ -8,7 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { AdminShell, type AdminPeriod } from "@/components/admin/AdminShell";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { rangeForPreset, type DateRange } from "@/lib/date-range";
+import { type DateRange } from "@/lib/date-range";
+import { adminPeriodToRange } from "@/lib/admin-period";
 import { Activity, Zap, Play, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -45,15 +46,8 @@ function computeStats(samples: number[]): Stats {
   };
 }
 
-function periodToRange(p: AdminPeriod): DateRange {
-  if (p === "24h") return rangeForPreset("today");
-  if (p === "7d") return rangeForPreset("7d");
-  if (p === "30d") return rangeForPreset("30d");
-  const end = new Date();
-  const start = new Date(end);
-  start.setDate(start.getDate() - 90);
-  return { start, end, preset: "custom" };
-}
+
+
 
 type ProbeResult = { index: number; ms: number; serverMs: number | null; status: number; xCache: string | null };
 
@@ -84,7 +78,9 @@ const TooltipStyle = {
 };
 
 function LatencyPage() {
-  const [period, setPeriod] = useState<AdminPeriod>("24h");
+  const [period, setPeriod] = useState<AdminPeriod>("today");
+  const [customStart, setCustomStart] = useState<string>("");
+  const [customEnd, setCustomEnd] = useState<string>("");
   const [clicks, setClicks] = useState<ClickLite[]>([]);
   const [links, setLinks] = useState<LinkLite[]>([]);
   const [probeSlug, setProbeSlug] = useState("");
@@ -92,7 +88,7 @@ function LatencyPage() {
   const [probing, setProbing] = useState(false);
   const [results, setResults] = useState<ProbeResult[]>([]);
 
-  const range = useMemo(() => periodToRange(period), [period]);
+  const range = useMemo<DateRange>(() => adminPeriodToRange(period, customStart, customEnd), [period, customStart, customEnd]);
 
   useEffect(() => { void load(); }, [range.start?.getTime()]);
 
@@ -204,7 +200,7 @@ function LatencyPage() {
   const stabilized = results.length >= 5 && results.slice(-5).every((r) => r.xCache === "MEM" || r.xCache === "HIT");
 
   return (
-    <AdminShell period={period} onPeriod={setPeriod}>
+    <AdminShell period={period} onPeriod={setPeriod} customStart={customStart} customEnd={customEnd} onCustomRange={(s, e) => { setCustomStart(s); setCustomEnd(e); }}>
       <div className="px-4 md:px-6 py-6 space-y-5">
         {/* Stat tiles */}
         <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

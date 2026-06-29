@@ -26,7 +26,7 @@ export function MetricCard({ label, value, delta, icon: Icon, series, accent = "
   const data = (series ?? []).map((v, i) => ({ i, v }));
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 transition-colors hover:border-border/80">
+    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-[0_0_0_1px_rgba(163,230,53,0.08),0_20px_40px_-20px_rgba(0,0,0,0.6)]">
       {/* subtle radial glow in background */}
       <div
         aria-hidden
@@ -46,14 +46,14 @@ export function MetricCard({ label, value, delta, icon: Icon, series, accent = "
         </div>
       </div>
 
-      <div className="relative mt-3 flex items-baseline gap-1.5">
-        <span className="text-[34px] font-semibold tracking-tight tabular-nums text-foreground leading-none">
+      <div className="relative mt-5 flex items-baseline gap-1.5">
+        <span className="text-[36px] font-bold tracking-tight tabular-nums text-foreground leading-none">
           {value}
         </span>
         {suffix && <span className="text-sm text-muted-foreground">{suffix}</span>}
       </div>
 
-      <div className="relative mt-3 flex items-end justify-between gap-3">
+      <div className="relative mt-5 flex items-end justify-between gap-3">
         {delta !== undefined && delta !== null ? (
           <div className="flex items-center gap-1.5 text-[11.5px]">
             <span className={cn(
