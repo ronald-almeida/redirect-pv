@@ -86,7 +86,7 @@ function EventsPage() {
     if (!range.start) return;
     const endIso = (range.end ?? new Date()).toISOString();
     const [linksRes, clicksRes] = await Promise.all([
-      supabase.from("links").select("id, slug, mode, click_limit, click_count, created_at"),
+      supabase.from("links").select("id, slug, name, mode, click_limit, click_count, created_at"),
       supabase.from("clicks")
         .select("id, link_id, mode_at_click, cache_status, redirect_ms, created_at")
         .gte("created_at", range.start.toISOString())
