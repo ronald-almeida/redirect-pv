@@ -202,7 +202,7 @@ function EventsPage() {
                   <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <th className="px-4 py-2.5 w-44">Data/Hora</th>
                     <th className="px-3 py-2.5 w-44">Evento</th>
-                    <th className="px-3 py-2.5">Slug</th>
+                    <th className="px-3 py-2.5">Link</th>
                     <th className="px-3 py-2.5 w-24">Tipo</th>
                     <th className="px-3 py-2.5">Detalhes</th>
                     <th className="px-3 py-2.5 w-24">Usuário</th>
