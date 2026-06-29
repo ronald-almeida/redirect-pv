@@ -106,13 +106,13 @@ function EventsPage() {
       if (t >= range.start.getTime() && t < (range.end ?? new Date()).getTime()) {
         ev.push({
           id: `lc-${l.id}`, ts: l.created_at, kind: "link_created",
-          slug: l.slug, mode: l.mode, detail: `Slug /${l.slug} criado em modo ${l.mode}`, user: "system",
+          slug: l.slug, linkName: l.name, mode: l.mode, detail: `Slug /${l.slug} criado em modo ${l.mode}`, user: "system",
         });
       }
       if (l.click_limit && l.click_count >= l.click_limit) {
         ev.push({
           id: `lim-${l.id}`, ts: l.created_at, kind: "limit_reached",
-          slug: l.slug, mode: l.mode, detail: `Limite de ${l.click_limit} cliques atingido`, user: "system",
+          slug: l.slug, linkName: l.name, mode: l.mode, detail: `Limite de ${l.click_limit} cliques atingido`, user: "system",
         });
       }
     }
@@ -121,26 +121,27 @@ function EventsPage() {
     for (const c of clicks) {
       const link = linkMap.get(c.link_id);
       const slug = link?.slug ?? c.link_id.slice(0, 6);
+      const linkName = link?.name ?? null;
       const ms = c.redirect_ms ?? 0;
       const baseMode = c.mode_at_click.split(":")[0];
 
       if (ms > 500) {
         ev.push({
           id: `rs-${c.id}`, ts: c.created_at, kind: "redirect_slow",
-          slug, mode: baseMode, user: "anônimo",
+          slug, linkName, mode: baseMode, user: "anônimo",
           detail: `Redirect levou ${ms}ms · cache ${c.cache_status ?? "—"}`,
         });
       } else {
         ev.push({
           id: `r-${c.id}`, ts: c.created_at, kind: "redirect",
-          slug, mode: baseMode, user: "anônimo",
+          slug, linkName, mode: baseMode, user: "anônimo",
           detail: `${ms}ms · cache ${c.cache_status ?? "—"} · mode ${baseMode}`,
         });
       }
       if (baseMode === "waiting") {
         ev.push({
           id: `wa-${c.id}`, ts: c.created_at, kind: "waiting_activated",
-          slug, mode: baseMode, user: "system",
+          slug, linkName, mode: baseMode, user: "system",
           detail: `Modo espera ativo: link sem destino real configurado`,
         });
       }
