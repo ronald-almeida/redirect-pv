@@ -46,14 +46,14 @@ export function MetricCard({ label, value, delta, icon: Icon, series, accent = "
         </div>
       </div>
 
-      <div className="relative mt-3 flex items-baseline gap-1.5">
-        <span className="text-[34px] font-semibold tracking-tight tabular-nums text-foreground leading-none">
+      <div className="relative mt-5 flex items-baseline gap-1.5">
+        <span className="text-[36px] font-bold tracking-tight tabular-nums text-foreground leading-none">
           {value}
         </span>
         {suffix && <span className="text-sm text-muted-foreground">{suffix}</span>}
       </div>
 
-      <div className="relative mt-3 flex items-end justify-between gap-3">
+      <div className="relative mt-5 flex items-end justify-between gap-3">
         {delta !== undefined && delta !== null ? (
           <div className="flex items-center gap-1.5 text-[11.5px]">
             <span className={cn(
