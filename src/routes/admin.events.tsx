@@ -222,7 +222,16 @@ function EventsPage() {
                             {meta.label}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 font-mono">/{e.slug}</td>
+                        <td className="px-3 py-2.5">
+                          {e.linkName ? (
+                            <div className="flex flex-col leading-tight">
+                              <span className="text-[13px] font-bold text-primary">{e.linkName}</span>
+                              <span className="font-mono text-[10.5px] text-muted-foreground">/{e.slug}</span>
+                            </div>
+                          ) : (
+                            <span className="font-mono text-[12px]">/{e.slug}</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2.5">
                           {e.mode && (
                             <StatusBadge
