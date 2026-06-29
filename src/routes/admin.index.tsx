@@ -116,7 +116,7 @@ function LinksPage() {
   const [clicks, setClicks] = useState<ClickRow[]>([]);
   const [latencyByCache, setLatencyByCache] = useState<Record<string, string | null>>({});
   const [search, setSearch] = useState("");
-  const [period, setPeriod] = useState<AdminPeriod>("7d");
+  const [period, setPeriod] = useState<AdminPeriod>("today");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
