@@ -172,6 +172,7 @@ const PREFETCH_REGEX = /prefetch|preview|prerender/i;
 
 type LinkRow = {
   id: string;
+  name: string | null;
   mode: string;
   real_url: string | null;
   decoy_url: string | null;
@@ -189,7 +190,7 @@ type LinkRow = {
 };
 
 const LINK_COLUMNS =
-  "id,mode,real_url,decoy_url,active,expires_at,click_limit,click_count,allowed_countries,blocked_ips,real_urls,ab_test,rotation_index,owner_only,owner_ips";
+  "id,name,mode,real_url,decoy_url,active,expires_at,click_limit,click_count,allowed_countries,blocked_ips,real_urls,ab_test,rotation_index,owner_only,owner_ips";
 
 // Raw PostgREST — bypasses supabase-js for ~5ms savings on the cold miss path.
 function pgRest(path: string, init?: RequestInit): Promise<Response> {
