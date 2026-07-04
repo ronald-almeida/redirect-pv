@@ -121,10 +121,12 @@ function LinksPage() {
   const [customEnd, setCustomEnd] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
   const [newSlug, setNewSlug] = useState("");
+  const [newSlugError, setNewSlugError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [origin, setOrigin] = useState("");
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [editing, setEditing] = useState<LinkRow | null>(null);
-  const [typeFilter, setTypeFilter] = useState<"all" | "real" | "decoy" | "waiting">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "real" | "waiting">("all");
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
