@@ -825,23 +825,30 @@ function LinksPage() {
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="ns" className="text-xs">Slug</Label>
-              <div className="flex items-center rounded-md border border-border bg-secondary px-2.5 focus-within:border-accent">
-                <span className="text-[12.5px] font-mono text-muted-foreground">{origin}/r/</span>
+              <div className={cn(
+                "flex items-center rounded-md border bg-secondary px-2.5 focus-within:border-accent",
+                newSlugError ? "border-destructive" : "border-border",
+              )}>
+                <span className="text-[12.5px] font-mono text-muted-foreground">{origin}/</span>
                 <input
                   id="ns"
                   value={newSlug}
-                  onChange={(e) => setNewSlug(e.target.value)}
-                  placeholder="meu-link"
+                  onChange={(e) => { setNewSlug(e.target.value); if (newSlugError) setNewSlugError(null); }}
+                  placeholder="ex: joao, maria, atendente-01"
                   required
                   autoFocus
                   className="flex-1 bg-transparent py-2 font-mono text-[12.5px] outline-none"
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground">O link é criado em modo Espera. Configure o destino depois.</p>
+              {newSlugError ? (
+                <p className="text-[11px] font-medium text-destructive">{newSlugError}</p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">Apenas letras minúsculas, números e hífens. O link é criado em modo Espera.</p>
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>Cancelar</Button>
-              <Button type="submit">Criar</Button>
+              <Button type="submit" disabled={creating}>{creating ? "Criando…" : "Criar"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
