@@ -232,31 +232,27 @@ async function fetchDefaultWaiting(): Promise<string | null> {
 }
 
 // ── Destination resolution (pure CPU, no I/O) ──────────────────────────────
-function pickDestination(
-  link: LinkRow,
-  defaultWaiting: string | null,
-  isBot: boolean,
-  ip: string,
-): { url: string | null; mode: string } {
-  const decoy = link.decoy_url || defaultWaiting || null;
-  const waiting = defaultWaiting || link.decoy_url || null;
+// Two possible outcomes now: "real" (transition page → real URL) or
+// "waiting" (institutional waiting page). Decoy mode has been removed from
+// the product; legacy decoy rows fall through to the waiting page.
+type Pick = { kind: "real"; url: string; mode: string } | { kind: "waiting"; mode: string };
 
-  if (isBot) return { url: decoy, mode: "decoy:bot" };
-  if (!link.active) return { url: decoy, mode: "decoy:inactive" };
+function pickDestination(link: LinkRow, isBot: boolean, ip: string): Pick {
+  if (isBot) return { kind: "waiting", mode: "waiting:bot" };
+  if (!link.active) return { kind: "waiting", mode: "waiting:inactive" };
   if (link.expires_at && new Date(link.expires_at).getTime() < Date.now())
-    return { url: decoy, mode: "decoy:expired" };
+    return { kind: "waiting", mode: "waiting:expired" };
   if (Array.isArray(link.blocked_ips) && ip && link.blocked_ips.includes(ip))
-    return { url: decoy, mode: "decoy:blocked_ip" };
+    return { kind: "waiting", mode: "waiting:blocked_ip" };
   if (
     link.owner_only &&
     (!ip || !Array.isArray(link.owner_ips) || !link.owner_ips.includes(ip))
   )
-    return { url: decoy, mode: "decoy:owner_only" };
+    return { kind: "waiting", mode: "waiting:owner_only" };
   if (link.click_limit !== null && link.click_count >= link.click_limit)
-    return { url: waiting, mode: "waiting:limit" };
+    return { kind: "waiting", mode: "waiting:limit" };
 
-  if (link.mode === "waiting") return { url: waiting, mode: "waiting" };
-  if (link.mode === "decoy") return { url: decoy, mode: "decoy" };
+  if (link.mode !== "real") return { kind: "waiting", mode: "waiting" };
 
   const pool: string[] =
     Array.isArray(link.real_urls) && link.real_urls.length > 0
@@ -265,22 +261,89 @@ function pickDestination(
         ? [link.real_url]
         : [];
 
-  if (pool.length === 0) return { url: decoy, mode: "decoy:no_real_url" };
+  if (pool.length === 0) return { kind: "waiting", mode: "waiting:no_real_url" };
 
+  let url: string;
   if (link.ab_test && pool.length >= 2) {
-    return { url: Math.random() < 0.5 ? pool[0] : pool[1], mode: "real" };
+    url = Math.random() < 0.5 ? pool[0] : pool[1];
+  } else if (pool.length > 1) {
+    url = pool[(link.rotation_index || 0) % pool.length];
+  } else {
+    url = pool[0];
   }
-  if (pool.length > 1) {
-    const idx = (link.rotation_index || 0) % pool.length;
-    return { url: pool[idx], mode: "real" };
-  }
-  return { url: pool[0], mode: "real" };
+  return { kind: "real", url, mode: "real" };
 }
 
-function notFound(): Response {
-  return new Response("Not Found", {
-    status: 404,
-    headers: { "Cache-Control": "no-store", "X-Cache": "MISS" },
+// ── HTML responses ─────────────────────────────────────────────────────────
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
+  );
+}
+
+function transitionHtml(destination: string): Response {
+  const safe = escapeHtml(destination);
+  const jsSafe = destination.replace(/[\\'"<>]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+  const body = `<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>Redirecionando…</title>
+<meta http-equiv="refresh" content="3;url=${safe}"/>
+<style>
+  :root{color-scheme:dark}
+  html,body{margin:0;height:100%;background:#0B0D12;color:#E6E8EC;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px;text-align:center}
+  .spinner{width:52px;height:52px;border-radius:50%;border:3px solid rgba(255,255,255,.08);border-top-color:#A3E635;animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  p{margin:0;font-size:14.5px;font-weight:400;color:#8A929E;letter-spacing:.01em}
+</style></head>
+<body><div class="wrap"><div class="spinner" aria-hidden="true"></div>
+<p>Estamos te redirecionando, por favor aguarde…</p></div>
+<script>setTimeout(function(){window.location.replace("${jsSafe}")},2400);</script>
+</body></html>`;
+  return new Response(body, {
+    status: 200,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Cache": "MISS" },
+  });
+}
+
+function waitingHtml(linkName: string | null, cacheStatus: string, redirectMs: number): Response {
+  const brand = escapeHtml((linkName && linkName.trim()) || "Contato");
+  const body = `<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>${brand}</title>
+<style>
+  :root{color-scheme:dark}
+  html,body{margin:0;height:100%;background:#0B0D12;color:#E6E8EC;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center}
+  .brand{font-size:15px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#A3E635;margin-bottom:40px}
+  .pulse{position:relative;width:96px;height:96px;margin-bottom:36px}
+  .pulse::before,.pulse::after{content:"";position:absolute;inset:0;border-radius:50%;background:rgba(163,230,53,.14);animation:pulse 2.4s cubic-bezier(.4,0,.6,1) infinite}
+  .pulse::after{animation-delay:1.2s}
+  .dot{position:absolute;inset:32px;border-radius:50%;background:#A3E635;box-shadow:0 0 32px rgba(163,230,53,.55)}
+  @keyframes pulse{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.6);opacity:0}}
+  h1{margin:0 0 14px;font-size:22px;font-weight:600;letter-spacing:-.01em;color:#F5F7F5;max-width:520px}
+  p{margin:0;font-size:14.5px;line-height:1.6;color:#8A929E;max-width:460px;font-weight:400}
+</style></head>
+<body><div class="wrap">
+<div class="brand">${brand}</div>
+<div class="pulse" aria-hidden="true"><div class="dot"></div></div>
+<h1>Em breve entraremos em contato com você</h1>
+<p>Obrigado pela sua paciência.</p>
+</div></body></html>`;
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Cache": cacheStatus,
+      "Server-Timing": `redirect;dur=${redirectMs}`,
+    },
   });
 }
 
