@@ -429,30 +429,21 @@ export async function handleRedirect(
     }
   }
 
-  // Soft-timeout fallback: send the user to the default waiting URL while the
-  // DB query finishes in the background and primes the cache.
+  // Soft-timeout fallback: institutional waiting page while the DB call
+  // keeps running in the background to prime the cache for the next hit.
   if (coldMissSoftFailed) {
-    const fallback = (await fetchDefaultWaiting()) || "about:blank";
     const ms = Date.now() - t0;
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: fallback,
-        "Cache-Control": "no-store",
-        "X-Cache": "MISS",
-        "X-Fallback": "soft-timeout",
-        "Server-Timing": `redirect;dur=${ms}`,
-      },
-    });
+    return waitingHtml(null, "MISS", ms);
   }
 
   if (!link) {
-    // Unknown slug → fast 404. No tracking, no cache write of garbage.
-    return notFound();
+    // Unknown slug → institutional waiting page (not a 404).
+    const ms = Date.now() - t0;
+    return waitingHtml(null, "MISS", ms);
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // [CACHE REFRESH] Step 3 — SWR background refresh (never blocks 302).
+  // [CACHE REFRESH] Step 3 — SWR background refresh (never blocks response).
   // ═══════════════════════════════════════════════════════════════════════
   if (revalidate) {
     scheduleBackground(
@@ -466,9 +457,6 @@ export async function handleRedirect(
 
   // ═══════════════════════════════════════════════════════════════════════
   // [HOT PATH] Step 4 — Minimal inline parsing for destination selection.
-  //   UA: regex on a short string (~µs)
-  //   IP: header read (~µs)
-  //   Everything else is deferred to background.
   // ═══════════════════════════════════════════════════════════════════════
   const ua = request.headers.get("user-agent") || "";
   const isBot = BOT_REGEX.test(ua);
@@ -478,75 +466,21 @@ export async function handleRedirect(
     "";
 
   // ═══════════════════════════════════════════════════════════════════════
-  // [HOT PATH] Step 5 — Settings on demand.
-  //   Only fetched when the link is in waiting mode OR hit click_limit.
-  //   Common real-redirect path never touches settings.
+  // [HOT PATH] Step 5 — Pick destination (pure CPU, no I/O).
   // ═══════════════════════════════════════════════════════════════════════
-  let defaultWaiting: string | null = null;
-  const needsSettings =
-    link.mode === "waiting" ||
-    (link.click_limit !== null && link.click_count >= link.click_limit);
-
-  if (needsSettings) {
-    if (memSettings.current) {
-      defaultWaiting = memSettings.current.value;
-      const ageS = (Date.now() - memSettings.current.storedAt) / 1000;
-      if (ageS > CACHE_TTL_SECONDS) {
-        scheduleBackground(
-          (async () => {
-            const fresh = await fetchDefaultWaiting();
-            memSettings.current = { value: fresh, storedAt: Date.now() };
-            await writeCacheEntry(SETTINGS_CACHE_KEY, fresh);
-          })(),
-        );
-      }
-    } else {
-      const cachedSettings =
-        await readCacheEntry<string | null>(SETTINGS_CACHE_KEY);
-      if (cachedSettings) {
-        defaultWaiting = cachedSettings.value;
-        memSettings.current = {
-          value: cachedSettings.value,
-          storedAt: cachedSettings.storedAt,
-        };
-      } else {
-        // Absolute cold miss for settings — single DB hit, then cached forever (SWR).
-        defaultWaiting = await fetchDefaultWaiting();
-        memSettings.current = { value: defaultWaiting, storedAt: Date.now() };
-        scheduleBackground(writeCacheEntry(SETTINGS_CACHE_KEY, defaultWaiting));
-      }
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // [HOT PATH] Step 6 — Pick destination (pure CPU, no I/O).
-  // ═══════════════════════════════════════════════════════════════════════
-  const { url: destination, mode: modeAtClick } = pickDestination(
-    link,
-    defaultWaiting,
-    isBot,
-    ip,
-  );
-
-  if (!destination) {
-    // No real, decoy, or waiting URL configured — 404 instead of redirecting somewhere weird.
-    return notFound();
-  }
-
+  const picked = pickDestination(link, isBot, ip);
+  const modeAtClick = picked.mode;
   const redirectMs = Date.now() - t0;
 
   // ═══════════════════════════════════════════════════════════════════════
-  // [HOT PATH] Step 7 — RESPOND. Nothing below this line touches the response.
+  // [HOT PATH] Step 6 — RESPOND. Nothing below this line touches the response.
+  //   - real  → server-rendered transition page (spinner) → real_url
+  //   - other → institutional waiting page (final page, no redirect)
   // ═══════════════════════════════════════════════════════════════════════
-  const response = new Response(null, {
-    status: 302,
-    headers: {
-      Location: destination,
-      "Cache-Control": "no-store",
-      "X-Cache": cacheStatus,
-      "Server-Timing": `redirect;dur=${redirectMs}`,
-    },
-  });
+  const response =
+    picked.kind === "real"
+      ? transitionHtml(picked.url)
+      : waitingHtml(link.name ?? null, cacheStatus, redirectMs);
 
   // ═══════════════════════════════════════════════════════════════════════
   // [BACKGROUND TRACKING] — Everything below runs AFTER the response is sent.
