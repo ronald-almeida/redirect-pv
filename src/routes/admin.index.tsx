@@ -276,12 +276,27 @@ function LinksPage() {
     return { ok, fail, total };
   }, [clicks]);
 
+  const SLUG_RE = /^[a-z0-9-]+$/;
+
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
-    const slug = newSlug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
-    if (!slug) return;
+    setNewSlugError(null);
+    const slug = newSlug.trim().toLowerCase();
+    if (!slug) { setNewSlugError("Informe um slug."); return; }
+    if (!SLUG_RE.test(slug)) {
+      setNewSlugError("Use apenas letras minúsculas, números e hífens.");
+      return;
+    }
+    setCreating(true);
+    const { data: existing } = await supabase.from("links").select("id").eq("slug", slug).maybeSingle();
+    if (existing) {
+      setCreating(false);
+      setNewSlugError("Este slug já existe");
+      return;
+    }
     const { error } = await supabase.from("links").insert({ slug, mode: "waiting" });
-    if (error) { alert(error.message); return; }
+    setCreating(false);
+    if (error) { setNewSlugError(error.message); return; }
     setNewSlug("");
     setCreateOpen(false);
     void loadLinks();
