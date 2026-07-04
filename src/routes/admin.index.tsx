@@ -544,7 +544,7 @@ function LinksPage() {
                                 <div className="mt-0.5 font-mono text-[11px] text-muted-foreground truncate max-w-[220px]">/{l.slug}</div>
                                 <div className="mt-1 flex items-center gap-1.5">
                                   <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">302 Redirect</span>
-                                  <StatusBadge kind={mode === "real" ? "real" : mode === "decoy" ? "decoy" : "waiting"} label={mode === "real" ? "Real" : mode === "decoy" ? "Isca" : "Espera"} />
+                                  <StatusBadge kind={mode === "real" ? "real" : "waiting"} label={mode === "real" ? "Real" : "Espera"} />
                                 </div>
                               </div>
                             </div>
