@@ -556,8 +556,7 @@ function LinksPage() {
                             <StatusBadge kind={mode === "real" ? "real" : mode === "decoy" ? "decoy" : "waiting"} label={mode === "real" ? "Real" : mode === "decoy" ? "Isca" : "Espera"} />
                           </td>
                           <td className="px-3 py-4 text-center tabular-nums text-primary font-semibold">{cReal}</td>
-                          <td className="px-3 py-4 text-center tabular-nums text-[#F59E0B] font-semibold">{cDecoy}</td>
-                          <td className="px-3 py-4 text-center tabular-nums text-[#A78BFA] font-semibold">{cWait}</td>
+                          <td className="px-3 py-4 text-center tabular-nums text-[#A78BFA] font-semibold">{cWait + cDecoy}</td>
                           <td className={cn("px-3 py-4 text-right tabular-nums", last === 0 ? "text-muted-foreground" : last < 100 ? "text-primary" : last < 300 ? "text-[#F59E0B]" : "text-destructive")}>
                             <div className="font-semibold">{last ? `${last}ms` : "—"}</div>
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{last === 0 ? "—" : last < 100 ? "Ótimo" : last < 300 ? "Normal" : "Lento"}</div>
