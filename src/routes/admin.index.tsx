@@ -505,7 +505,6 @@ function LinksPage() {
                       <th className="px-4 py-3.5 font-semibold">Status</th>
                       <th className="px-4 py-3.5 font-semibold">Tipo</th>
                       <th className="px-4 py-3.5 font-semibold text-center">Real</th>
-                      <th className="px-4 py-3.5 font-semibold text-center">Isca</th>
                       <th className="px-4 py-3.5 font-semibold text-center">Espera</th>
                       <th className="px-4 py-3.5 font-semibold text-right">Última<br/>latência</th>
                       <th className="px-4 py-3.5 font-semibold">Média</th>
