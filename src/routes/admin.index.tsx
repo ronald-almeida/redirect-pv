@@ -121,10 +121,12 @@ function LinksPage() {
   const [customEnd, setCustomEnd] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
   const [newSlug, setNewSlug] = useState("");
+  const [newSlugError, setNewSlugError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [origin, setOrigin] = useState("");
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [editing, setEditing] = useState<LinkRow | null>(null);
-  const [typeFilter, setTypeFilter] = useState<"all" | "real" | "decoy" | "waiting">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "real" | "waiting">("all");
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -274,12 +276,27 @@ function LinksPage() {
     return { ok, fail, total };
   }, [clicks]);
 
+  const SLUG_RE = /^[a-z0-9-]+$/;
+
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
-    const slug = newSlug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
-    if (!slug) return;
+    setNewSlugError(null);
+    const slug = newSlug.trim().toLowerCase();
+    if (!slug) { setNewSlugError("Informe um slug."); return; }
+    if (!SLUG_RE.test(slug)) {
+      setNewSlugError("Use apenas letras minúsculas, números e hífens.");
+      return;
+    }
+    setCreating(true);
+    const { data: existing } = await supabase.from("links").select("id").eq("slug", slug).maybeSingle();
+    if (existing) {
+      setCreating(false);
+      setNewSlugError("Este slug já existe");
+      return;
+    }
     const { error } = await supabase.from("links").insert({ slug, mode: "waiting" });
-    if (error) { alert(error.message); return; }
+    setCreating(false);
+    if (error) { setNewSlugError(error.message); return; }
     setNewSlug("");
     setCreateOpen(false);
     void loadLinks();
@@ -328,7 +345,7 @@ function LinksPage() {
   };
 
   const copyLink = (slug: string) => {
-    navigator.clipboard.writeText(`${origin}/r/${slug}`);
+    navigator.clipboard.writeText(`${origin}/${slug}`);
     setCopiedSlug(slug);
     setTimeout(() => setCopiedSlug((s) => (s === slug ? null : s)), 1500);
   };
@@ -342,12 +359,11 @@ function LinksPage() {
 
   const saveEditing = async () => {
     if (!editing) return;
-    const newSlug = editing.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
+    const newSlug = editing.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
     const { error } = await supabase.from("links").update({
       slug: newSlug,
       name: editing.name?.trim() || null,
       real_url: editing.real_url?.trim() || null,
-      decoy_url: editing.decoy_url?.trim() || null,
       page_title: editing.page_title?.trim() || DEFAULTS.page_title,
       page_message: editing.page_message?.trim() || DEFAULTS.page_message,
       page_icon: editing.page_icon?.trim() || DEFAULTS.page_icon,
@@ -449,7 +465,6 @@ function LinksPage() {
               {([
                 { k: "all", l: "Todos" },
                 { k: "real", l: "Real" },
-                { k: "decoy", l: "Isca" },
                 { k: "waiting", l: "Espera" },
               ] as const).map(({ k, l }) => (
                 <button
@@ -489,7 +504,6 @@ function LinksPage() {
                       <th className="px-4 py-3.5 font-semibold">Status</th>
                       <th className="px-4 py-3.5 font-semibold">Tipo</th>
                       <th className="px-4 py-3.5 font-semibold text-center">Real</th>
-                      <th className="px-4 py-3.5 font-semibold text-center">Isca</th>
                       <th className="px-4 py-3.5 font-semibold text-center">Espera</th>
                       <th className="px-4 py-3.5 font-semibold text-right">Última<br/>latência</th>
                       <th className="px-4 py-3.5 font-semibold">Média</th>
@@ -529,7 +543,7 @@ function LinksPage() {
                                 <div className="mt-0.5 font-mono text-[11px] text-muted-foreground truncate max-w-[220px]">/{l.slug}</div>
                                 <div className="mt-1 flex items-center gap-1.5">
                                   <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">302 Redirect</span>
-                                  <StatusBadge kind={mode === "real" ? "real" : mode === "decoy" ? "decoy" : "waiting"} label={mode === "real" ? "Real" : mode === "decoy" ? "Isca" : "Espera"} />
+                                  <StatusBadge kind={mode === "real" ? "real" : "waiting"} label={mode === "real" ? "Real" : "Espera"} />
                                 </div>
                               </div>
                             </div>
@@ -538,11 +552,10 @@ function LinksPage() {
                             <StatusBadge kind={status} label={status === "active" ? "Ativo" : status === "paused" ? "Pausado" : "Espera"} dot />
                           </td>
                           <td className="px-3 py-4">
-                            <StatusBadge kind={mode === "real" ? "real" : mode === "decoy" ? "decoy" : "waiting"} label={mode === "real" ? "Real" : mode === "decoy" ? "Isca" : "Espera"} />
+                            <StatusBadge kind={mode === "real" ? "real" : "waiting"} label={mode === "real" ? "Real" : "Espera"} />
                           </td>
                           <td className="px-3 py-4 text-center tabular-nums text-primary font-semibold">{cReal}</td>
-                          <td className="px-3 py-4 text-center tabular-nums text-[#F59E0B] font-semibold">{cDecoy}</td>
-                          <td className="px-3 py-4 text-center tabular-nums text-[#A78BFA] font-semibold">{cWait}</td>
+                          <td className="px-3 py-4 text-center tabular-nums text-[#A78BFA] font-semibold">{cWait + cDecoy}</td>
                           <td className={cn("px-3 py-4 text-right tabular-nums", last === 0 ? "text-muted-foreground" : last < 100 ? "text-primary" : last < 300 ? "text-[#F59E0B]" : "text-destructive")}>
                             <div className="font-semibold">{last ? `${last}ms` : "—"}</div>
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{last === 0 ? "—" : last < 100 ? "Ótimo" : last < 300 ? "Normal" : "Lento"}</div>
@@ -605,7 +618,7 @@ function LinksPage() {
                                   <MoreHorizontal className="h-3.5 w-3.5" />
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48">
-                                  <DropdownMenuItem onClick={() => window.open(`/r/${l.slug}`, "_blank")}>
+                                  <DropdownMenuItem onClick={() => window.open(`/${l.slug}`, "_blank")}>
                                     <ExternalLink className="h-3.5 w-3.5" /> Abrir
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setActive(l, !l.active)}>
@@ -615,9 +628,6 @@ function LinksPage() {
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem onClick={() => setMode(l, "real")}>
                                     <span className="h-2 w-2 rounded-full bg-primary" /> Modo: Real
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setMode(l, "decoy")}>
-                                    <span className="h-2 w-2 rounded-full bg-[#F59E0B]" /> Modo: Isca
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setMode(l, "waiting")}>
                                     <span className="h-2 w-2 rounded-full bg-[#A78BFA]" /> Modo: Espera
@@ -815,23 +825,30 @@ function LinksPage() {
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="ns" className="text-xs">Slug</Label>
-              <div className="flex items-center rounded-md border border-border bg-secondary px-2.5 focus-within:border-accent">
-                <span className="text-[12.5px] font-mono text-muted-foreground">{origin}/r/</span>
+              <div className={cn(
+                "flex items-center rounded-md border bg-secondary px-2.5 focus-within:border-accent",
+                newSlugError ? "border-destructive" : "border-border",
+              )}>
+                <span className="text-[12.5px] font-mono text-muted-foreground">{origin}/</span>
                 <input
                   id="ns"
                   value={newSlug}
-                  onChange={(e) => setNewSlug(e.target.value)}
-                  placeholder="meu-link"
+                  onChange={(e) => { setNewSlug(e.target.value); if (newSlugError) setNewSlugError(null); }}
+                  placeholder="ex: joao, maria, atendente-01"
                   required
                   autoFocus
                   className="flex-1 bg-transparent py-2 font-mono text-[12.5px] outline-none"
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground">O link é criado em modo Espera. Configure o destino depois.</p>
+              {newSlugError ? (
+                <p className="text-[11px] font-medium text-destructive">{newSlugError}</p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">Apenas letras minúsculas, números e hífens. O link é criado em modo Espera.</p>
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>Cancelar</Button>
-              <Button type="submit">Criar</Button>
+              <Button type="submit" disabled={creating}>{creating ? "Criando…" : "Criar"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -855,9 +872,6 @@ function LinksPage() {
               </div>
               <Field label="URL real">
                 <Input value={editing.real_url ?? ""} onChange={(e) => persistEditing({ real_url: e.target.value })} placeholder="https://destino.com" />
-              </Field>
-              <Field label="URL isca">
-                <Input value={editing.decoy_url ?? ""} onChange={(e) => persistEditing({ decoy_url: e.target.value })} placeholder="https://isca.com" />
               </Field>
               <div className="rounded-md border border-border bg-secondary/50 p-3 space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Página de espera</div>
