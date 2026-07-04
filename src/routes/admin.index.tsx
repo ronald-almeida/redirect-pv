@@ -451,7 +451,6 @@ function LinksPage() {
               {([
                 { k: "all", l: "Todos" },
                 { k: "real", l: "Real" },
-                { k: "decoy", l: "Isca" },
                 { k: "waiting", l: "Espera" },
               ] as const).map(({ k, l }) => (
                 <button
