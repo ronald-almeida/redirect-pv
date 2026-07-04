@@ -618,7 +618,7 @@ function LinksPage() {
                                   <MoreHorizontal className="h-3.5 w-3.5" />
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48">
-                                  <DropdownMenuItem onClick={() => window.open(`/r/${l.slug}`, "_blank")}>
+                                  <DropdownMenuItem onClick={() => window.open(`/${l.slug}`, "_blank")}>
                                     <ExternalLink className="h-3.5 w-3.5" /> Abrir
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setActive(l, !l.active)}>
