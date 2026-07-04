@@ -630,9 +630,6 @@ function LinksPage() {
                                   <DropdownMenuItem onClick={() => setMode(l, "real")}>
                                     <span className="h-2 w-2 rounded-full bg-primary" /> Modo: Real
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setMode(l, "decoy")}>
-                                    <span className="h-2 w-2 rounded-full bg-[#F59E0B]" /> Modo: Isca
-                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setMode(l, "waiting")}>
                                     <span className="h-2 w-2 rounded-full bg-[#A78BFA]" /> Modo: Espera
                                   </DropdownMenuItem>
