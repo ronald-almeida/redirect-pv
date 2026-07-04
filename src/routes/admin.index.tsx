@@ -359,12 +359,11 @@ function LinksPage() {
 
   const saveEditing = async () => {
     if (!editing) return;
-    const newSlug = editing.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
+    const newSlug = editing.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
     const { error } = await supabase.from("links").update({
       slug: newSlug,
       name: editing.name?.trim() || null,
       real_url: editing.real_url?.trim() || null,
-      decoy_url: editing.decoy_url?.trim() || null,
       page_title: editing.page_title?.trim() || DEFAULTS.page_title,
       page_message: editing.page_message?.trim() || DEFAULTS.page_message,
       page_icon: editing.page_icon?.trim() || DEFAULTS.page_icon,
