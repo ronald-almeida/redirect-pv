@@ -867,9 +867,6 @@ function LinksPage() {
               <Field label="URL real">
                 <Input value={editing.real_url ?? ""} onChange={(e) => persistEditing({ real_url: e.target.value })} placeholder="https://destino.com" />
               </Field>
-              <Field label="URL isca">
-                <Input value={editing.decoy_url ?? ""} onChange={(e) => persistEditing({ decoy_url: e.target.value })} placeholder="https://isca.com" />
-              </Field>
               <div className="rounded-md border border-border bg-secondary/50 p-3 space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Página de espera</div>
                 <div className="grid grid-cols-[80px_1fr] gap-3">
