@@ -345,7 +345,7 @@ function LinksPage() {
   };
 
   const copyLink = (slug: string) => {
-    navigator.clipboard.writeText(`${origin}/r/${slug}`);
+    navigator.clipboard.writeText(`${origin}/${slug}`);
     setCopiedSlug(slug);
     setTimeout(() => setCopiedSlug((s) => (s === slug ? null : s)), 1500);
   };
