@@ -553,7 +553,7 @@ function LinksPage() {
                             <StatusBadge kind={status} label={status === "active" ? "Ativo" : status === "paused" ? "Pausado" : "Espera"} dot />
                           </td>
                           <td className="px-3 py-4">
-                            <StatusBadge kind={mode === "real" ? "real" : mode === "decoy" ? "decoy" : "waiting"} label={mode === "real" ? "Real" : mode === "decoy" ? "Isca" : "Espera"} />
+                            <StatusBadge kind={mode === "real" ? "real" : "waiting"} label={mode === "real" ? "Real" : "Espera"} />
                           </td>
                           <td className="px-3 py-4 text-center tabular-nums text-primary font-semibold">{cReal}</td>
                           <td className="px-3 py-4 text-center tabular-nums text-[#A78BFA] font-semibold">{cWait + cDecoy}</td>
