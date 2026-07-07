@@ -383,13 +383,17 @@ export async function handleRedirect(
   if (mem) {
     link = mem.value;
     const ageS = (Date.now() - mem.storedAt) / 1000;
-    if (ageS <= CACHE_TTL_SECONDS) {
+    if (ageS <= MEM_TTL_SECONDS) {
       cacheStatus = "MEM";
     } else {
-      cacheStatus = "STALE";
-      revalidate = true;
+      // Mem is stale — drop it and fall through to edge cache / DB so a
+      // recent admin edit propagates across isolates within seconds.
+      memLinks.delete(slug);
+      link = null;
     }
-  } else {
+  }
+
+  if (!link && cacheStatus === "MISS") {
     const cached = await readCacheEntry<LinkRow | null>(linkCacheKey);
     if (cached) {
       link = cached.value;
@@ -403,6 +407,7 @@ export async function handleRedirect(
       }
     }
   }
+
 
   // ═══════════════════════════════════════════════════════════════════════
   // [COLD MISS FALLBACK] Step 2 — Only if no cache at all, hit Postgres.
