@@ -485,6 +485,18 @@ export async function handleRedirect(
   const modeAtClick = picked.mode;
   const redirectMs = Date.now() - t0;
 
+  // Diagnostics — kept lightweight; runs after cache/DB resolution.
+  console.log("[redirect] link data:", JSON.stringify({
+    slug, cacheStatus, mode: link.mode, real_url: link.real_url,
+    active: link.active, expires_at: link.expires_at, owner_only: link.owner_only,
+    click_limit: link.click_limit, click_count: link.click_count,
+  }));
+  if (link.mode === "real" && (!link.real_url || link.real_url.trim() === "")) {
+    console.log("[redirect] real mode but real_url is empty, showing waiting page");
+  }
+  console.log("[redirect] picked:", picked.kind, "modeAtClick:", modeAtClick);
+
+
   // ═══════════════════════════════════════════════════════════════════════
   // [HOT PATH] Step 6 — RESPOND. Nothing below this line touches the response.
   //   - real  → server-rendered transition page (spinner) → real_url
