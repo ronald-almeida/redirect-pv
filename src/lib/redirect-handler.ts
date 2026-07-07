@@ -62,10 +62,17 @@ function scheduleBackground(p: Promise<unknown>): void {
 }
 
 // ── Cache configuration ────────────────────────────────────────────────────
-const CACHE_TTL_SECONDS = 3_600; // fresh window — no revalidation (1h)
+// MEM TTL is intentionally short: the in-memory Map is per-isolate, so an
+// admin DELETE /r/<slug> only purges the isolate that received it. Other
+// isolates would otherwise keep serving stale mode/real_url values for the
+// full EDGE TTL. A short MEM TTL forces isolates to re-check the (purgable)
+// edge cache within seconds.
+const MEM_TTL_SECONDS = 30; // per-isolate memory freshness
+const CACHE_TTL_SECONDS = 3_600; // edge cache fresh window (1h)
 const CACHE_SWR_SECONDS = 86_400; // stale window — served + revalidated (24h)
 const COLD_MISS_HARD_TIMEOUT_MS = 800; // abort DB if slower than this
 const COLD_MISS_SOFT_TIMEOUT_MS = 400; // fall back to waiting URL beyond this
+
 
 // CRITICAL: Cloudflare Workers' caches.default REQUIRES the cache key URL to use
 // a hostname owned by the zone. Synthetic hosts (cache.internal) cause put() to
