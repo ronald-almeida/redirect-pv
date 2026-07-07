@@ -62,10 +62,17 @@ function scheduleBackground(p: Promise<unknown>): void {
 }
 
 // ── Cache configuration ────────────────────────────────────────────────────
-const CACHE_TTL_SECONDS = 3_600; // fresh window — no revalidation (1h)
+// MEM TTL is intentionally short: the in-memory Map is per-isolate, so an
+// admin DELETE /r/<slug> only purges the isolate that received it. Other
+// isolates would otherwise keep serving stale mode/real_url values for the
+// full EDGE TTL. A short MEM TTL forces isolates to re-check the (purgable)
+// edge cache within seconds.
+const MEM_TTL_SECONDS = 30; // per-isolate memory freshness
+const CACHE_TTL_SECONDS = 3_600; // edge cache fresh window (1h)
 const CACHE_SWR_SECONDS = 86_400; // stale window — served + revalidated (24h)
 const COLD_MISS_HARD_TIMEOUT_MS = 800; // abort DB if slower than this
 const COLD_MISS_SOFT_TIMEOUT_MS = 400; // fall back to waiting URL beyond this
+
 
 // CRITICAL: Cloudflare Workers' caches.default REQUIRES the cache key URL to use
 // a hostname owned by the zone. Synthetic hosts (cache.internal) cause put() to
@@ -376,13 +383,17 @@ export async function handleRedirect(
   if (mem) {
     link = mem.value;
     const ageS = (Date.now() - mem.storedAt) / 1000;
-    if (ageS <= CACHE_TTL_SECONDS) {
+    if (ageS <= MEM_TTL_SECONDS) {
       cacheStatus = "MEM";
     } else {
-      cacheStatus = "STALE";
-      revalidate = true;
+      // Mem is stale — drop it and fall through to edge cache / DB so a
+      // recent admin edit propagates across isolates within seconds.
+      memLinks.delete(slug);
+      link = null;
     }
-  } else {
+  }
+
+  if (!link && cacheStatus === "MISS") {
     const cached = await readCacheEntry<LinkRow | null>(linkCacheKey);
     if (cached) {
       link = cached.value;
@@ -396,6 +407,7 @@ export async function handleRedirect(
       }
     }
   }
+
 
   // ═══════════════════════════════════════════════════════════════════════
   // [COLD MISS FALLBACK] Step 2 — Only if no cache at all, hit Postgres.
@@ -472,6 +484,18 @@ export async function handleRedirect(
   const picked = pickDestination(link, isBot, ip);
   const modeAtClick = picked.mode;
   const redirectMs = Date.now() - t0;
+
+  // Diagnostics — kept lightweight; runs after cache/DB resolution.
+  console.log("[redirect] link data:", JSON.stringify({
+    slug, cacheStatus, mode: link.mode, real_url: link.real_url,
+    active: link.active, expires_at: link.expires_at, owner_only: link.owner_only,
+    click_limit: link.click_limit, click_count: link.click_count,
+  }));
+  if (link.mode === "real" && (!link.real_url || link.real_url.trim() === "")) {
+    console.log("[redirect] real mode but real_url is empty, showing waiting page");
+  }
+  console.log("[redirect] picked:", picked.kind, "modeAtClick:", modeAtClick);
+
 
   // ═══════════════════════════════════════════════════════════════════════
   // [HOT PATH] Step 6 — RESPOND. Nothing below this line touches the response.
