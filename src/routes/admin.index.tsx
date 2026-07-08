@@ -77,9 +77,9 @@ const PERIOD_SHORT: Record<AdminPeriod, string> = {
   custom: "Período",
 };
 
-const purgeEdgeCache = (slug: string) => {
-  fetch(`/r/${encodeURIComponent(slug)}`, { method: "DELETE" }).catch(() => {});
-};
+// Cache foi removido do sistema de redirect — no-op mantido para preservar
+// pontos de chamada existentes sem alterar fluxos.
+const purgeEdgeCache = (_slug: string) => {};
 
 
 function formatRel(iso: string | null | undefined): string {

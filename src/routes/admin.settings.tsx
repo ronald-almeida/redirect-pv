@@ -115,7 +115,7 @@ function SettingsPage() {
               <Row label="Camada em memória" value="Isolate em memória · TTL ~30s" />
               <Row label="Camada de borda" value="TTL 24h · chave por hostname da zona" mono />
               <Row label="Revalidação" value="SWR — entrega imediata e atualização em segundo plano" />
-              <Row label="Invalidação" value="DELETE /r/&lt;slug&gt; limpa as duas camadas" mono />
+              <Row label="Cache" value="Desativado — leitura direta do banco em cada request" mono />
             </Section>
             <Section title="Limpeza global" desc="Força refresh de todos os slugs imediatamente.">
               <Button variant="outline" onClick={() => void purgeAllCache()} disabled={purging} className="gap-1.5">
