@@ -156,22 +156,43 @@ function LinksPage() {
 
   useEffect(() => { void loadClicks(); }, [range.start?.getTime(), range.end?.getTime()]);
 
-  // realtime updates
+  // realtime updates for links + clicks
   useEffect(() => {
     const ch = supabase
       .channel("admin-links-stream")
       .on("postgres_changes", { event: "*", schema: "public", table: "links" }, (p) => {
         if (p.eventType === "UPDATE") {
-          setLinks((prev) => prev.map((l) => l.id === (p.new as LinkRow).id ? { ...l, ...(p.new as LinkRow) } : l));
+          const next = p.new as LinkRow;
+          setLinks((prev) => prev.map((l) => (l.id === next.id ? { ...l, ...next } : l)));
+          const old = p.old as Partial<LinkRow> | undefined;
+          if (old && (old.click_count as number | undefined) !== undefined &&
+              (next as unknown as { click_count?: number }).click_count !== old.click_count) {
+            pulseLink(next.id);
+          }
         } else if (p.eventType === "INSERT") {
           setLinks((prev) => [p.new as LinkRow, ...prev]);
         } else if (p.eventType === "DELETE") {
           setLinks((prev) => prev.filter((l) => l.id !== (p.old as LinkRow).id));
         }
       })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "clicks" }, (p) => {
+        const row = p.new as ClickRow & { cache_status?: string | null; redirect_ms?: number | null };
+        setClicks((prev) => {
+          if (!range.start) return prev;
+          const t = new Date(row.created_at).getTime();
+          const start = range.start.getTime();
+          const endT = (range.end ?? new Date()).getTime();
+          if (t < start || t >= endT) return prev;
+          return [row, ...prev];
+        });
+        if (row.cache_status) {
+          setLatencyByCache((prev) => ({ ...prev, [row.link_id]: row.cache_status ?? null }));
+        }
+        pulseLink(row.link_id);
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [range.start?.getTime(), range.end?.getTime()]);
 
   async function loadLinks() {
     const { data } = await supabase.from("links").select("*").order("created_at", { ascending: false });
