@@ -577,7 +577,15 @@ function LinksPage() {
                                 <Link2 className="h-4 w-4" />
                               </div>
                               <div className="min-w-0">
-                                <div className="text-[14px] font-bold text-primary truncate max-w-[220px]">{l.name?.trim() || l.real_url || "—"}</div>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="text-[14px] font-bold text-primary truncate max-w-[220px]">{l.name?.trim() || l.real_url || "—"}</div>
+                                  {pulseIds.has(l.id) && (
+                                    <span className="relative flex h-2 w-2 shrink-0" title="Novo clique">
+                                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                                      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="mt-0.5 font-mono text-[11px] text-muted-foreground truncate max-w-[220px]">/{l.slug}</div>
                                 <div className="mt-1 flex items-center gap-1.5">
                                   <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">302 Redirect</span>
