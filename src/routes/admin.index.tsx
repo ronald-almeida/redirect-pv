@@ -570,7 +570,7 @@ function LinksPage() {
                       const sparkData = buildSparkSeries(linkClicks, range, 14).map((v, i) => ({ i, v }));
 
                       return (
-                        <tr key={l.id} className="group border-t border-border/60 odd:bg-transparent even:bg-secondary/20 hover:bg-primary/[0.04] hover:shadow-[inset_3px_0_0_0_rgba(163,230,53,0.55)] transition-all">
+                        <tr key={l.id} className={cn("group border-t border-border/60 odd:bg-transparent even:bg-secondary/20 hover:bg-primary/[0.04] hover:shadow-[inset_3px_0_0_0_rgba(163,230,53,0.55)] transition-all", pulseIds.has(l.id) && "bg-primary/[0.08] shadow-[inset_3px_0_0_0_rgba(163,230,53,0.9)]")}>
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
                               <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", accent.tile, accent.ring)}>
