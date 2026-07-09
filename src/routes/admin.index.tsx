@@ -128,7 +128,24 @@ function LinksPage() {
   const [editing, setEditing] = useState<LinkRow | null>(null);
   const [typeFilter, setTypeFilter] = useState<"all" | "real" | "waiting">("all");
   const [page, setPage] = useState(1);
+  const [pulseIds, setPulseIds] = useState<Set<string>>(new Set());
   const pageSize = 10;
+
+  const pulseLink = (linkId: string) => {
+    setPulseIds((prev) => {
+      const next = new Set(prev);
+      next.add(linkId);
+      return next;
+    });
+    setTimeout(() => {
+      setPulseIds((prev) => {
+        if (!prev.has(linkId)) return prev;
+        const next = new Set(prev);
+        next.delete(linkId);
+        return next;
+      });
+    }, 1400);
+  };
 
   const range = useMemo<DateRange>(() => adminPeriodToRange(period, customStart, customEnd), [period, customStart, customEnd]);
 
