@@ -61,6 +61,7 @@ interface LinkRow {
   avg_redirect_ms?: number | null;
   last_redirect_ms?: number | null;
   total_redirects?: number | null;
+  click_count?: number | null;
 }
 
 const DEFAULTS = {
@@ -128,7 +129,24 @@ function LinksPage() {
   const [editing, setEditing] = useState<LinkRow | null>(null);
   const [typeFilter, setTypeFilter] = useState<"all" | "real" | "waiting">("all");
   const [page, setPage] = useState(1);
+  const [pulseIds, setPulseIds] = useState<Set<string>>(new Set());
   const pageSize = 10;
+
+  const pulseLink = (linkId: string) => {
+    setPulseIds((prev) => {
+      const next = new Set(prev);
+      next.add(linkId);
+      return next;
+    });
+    setTimeout(() => {
+      setPulseIds((prev) => {
+        if (!prev.has(linkId)) return prev;
+        const next = new Set(prev);
+        next.delete(linkId);
+        return next;
+      });
+    }, 1400);
+  };
 
   const range = useMemo<DateRange>(() => adminPeriodToRange(period, customStart, customEnd), [period, customStart, customEnd]);
 
@@ -139,22 +157,42 @@ function LinksPage() {
 
   useEffect(() => { void loadClicks(); }, [range.start?.getTime(), range.end?.getTime()]);
 
-  // realtime updates
+  // realtime updates for links + clicks
   useEffect(() => {
     const ch = supabase
       .channel("admin-links-stream")
       .on("postgres_changes", { event: "*", schema: "public", table: "links" }, (p) => {
         if (p.eventType === "UPDATE") {
-          setLinks((prev) => prev.map((l) => l.id === (p.new as LinkRow).id ? { ...l, ...(p.new as LinkRow) } : l));
+          const next = p.new as LinkRow;
+          setLinks((prev) => prev.map((l) => (l.id === next.id ? { ...l, ...next } : l)));
+          const old = p.old as Partial<LinkRow> | undefined;
+          if (old && next.click_count !== old.click_count) {
+            pulseLink(next.id);
+          }
         } else if (p.eventType === "INSERT") {
           setLinks((prev) => [p.new as LinkRow, ...prev]);
         } else if (p.eventType === "DELETE") {
           setLinks((prev) => prev.filter((l) => l.id !== (p.old as LinkRow).id));
         }
       })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "clicks" }, (p) => {
+        const row = p.new as ClickRow & { cache_status?: string | null; redirect_ms?: number | null };
+        setClicks((prev) => {
+          if (!range.start) return prev;
+          const t = new Date(row.created_at).getTime();
+          const start = range.start.getTime();
+          const endT = (range.end ?? new Date()).getTime();
+          if (t < start || t >= endT) return prev;
+          return [row, ...prev];
+        });
+        if (row.cache_status) {
+          setLatencyByCache((prev) => ({ ...prev, [row.link_id]: row.cache_status ?? null }));
+        }
+        pulseLink(row.link_id);
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [range.start?.getTime(), range.end?.getTime()]);
 
   async function loadLinks() {
     const { data } = await supabase.from("links").select("*").order("created_at", { ascending: false });
@@ -532,14 +570,22 @@ function LinksPage() {
                       const sparkData = buildSparkSeries(linkClicks, range, 14).map((v, i) => ({ i, v }));
 
                       return (
-                        <tr key={l.id} className="group border-t border-border/60 odd:bg-transparent even:bg-secondary/20 hover:bg-primary/[0.04] hover:shadow-[inset_3px_0_0_0_rgba(163,230,53,0.55)] transition-all">
+                        <tr key={l.id} className={cn("group border-t border-border/60 odd:bg-transparent even:bg-secondary/20 hover:bg-primary/[0.04] hover:shadow-[inset_3px_0_0_0_rgba(163,230,53,0.55)] transition-all", pulseIds.has(l.id) && "bg-primary/[0.08] shadow-[inset_3px_0_0_0_rgba(163,230,53,0.9)]")}>
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
                               <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", accent.tile, accent.ring)}>
                                 <Link2 className="h-4 w-4" />
                               </div>
                               <div className="min-w-0">
-                                <div className="text-[14px] font-bold text-primary truncate max-w-[220px]">{l.name?.trim() || l.real_url || "—"}</div>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="text-[14px] font-bold text-primary truncate max-w-[220px]">{l.name?.trim() || l.real_url || "—"}</div>
+                                  {pulseIds.has(l.id) && (
+                                    <span className="relative flex h-2 w-2 shrink-0" title="Novo clique">
+                                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                                      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="mt-0.5 font-mono text-[11px] text-muted-foreground truncate max-w-[220px]">/{l.slug}</div>
                                 <div className="mt-1 flex items-center gap-1.5">
                                   <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">302 Redirect</span>
