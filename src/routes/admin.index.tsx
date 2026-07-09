@@ -166,8 +166,7 @@ function LinksPage() {
           const next = p.new as LinkRow;
           setLinks((prev) => prev.map((l) => (l.id === next.id ? { ...l, ...next } : l)));
           const old = p.old as Partial<LinkRow> | undefined;
-          if (old && (old.click_count as number | undefined) !== undefined &&
-              (next as unknown as { click_count?: number }).click_count !== old.click_count) {
+          if (old && next.click_count !== old.click_count) {
             pulseLink(next.id);
           }
         } else if (p.eventType === "INSERT") {
