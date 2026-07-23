@@ -397,7 +397,7 @@ function LinksPage() {
 
   const saveEditing = async () => {
     if (!editing) return;
-    const newSlug = editing.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    const newSlug = editing.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
     const { error } = await supabase.from("links").update({
       slug: newSlug,
       name: editing.name?.trim() || null,
