@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 import type { DateRange as RDPRange } from "react-day-picker";
 
 type NavItem = {
-  to: "/admin" | "/admin/analytics" | "/admin/latency" | "/admin/events" | "/admin/settings";
+  to: "/admin" | "/admin/analytics" | "/admin/latency" | "/admin/events" | "/admin/domains" | "/admin/settings";
   label: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   badge?: string;
@@ -44,6 +44,7 @@ const NAV: NavItem[] = [
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/latency", label: "Latência", icon: Activity },
   { to: "/admin/events", label: "Eventos", icon: ScrollText },
+  { to: "/admin/domains", label: "Domínios", icon: Globe },
   { to: "/admin/settings", label: "Configurações", icon: Settings },
 ];
 
