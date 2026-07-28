@@ -130,7 +130,17 @@ function LinksPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | "real" | "waiting">("all");
   const [page, setPage] = useState(1);
   const [pulseIds, setPulseIds] = useState<Set<string>>(new Set());
+  const [domains, setDomains] = useState<DomainRow[]>([]);
+  const [linkDomain, setLinkDomain] = useState<Record<string, string>>({});
   const pageSize = 10;
+
+  const activeDomains = useMemo(() => domains.filter((d) => d.active), [domains]);
+  const primaryDomain = useMemo(
+    () => domains.find((d) => d.is_primary && d.active)?.domain ?? activeDomains[0]?.domain ?? "",
+    [domains, activeDomains],
+  );
+  const domainFor = (id: string) => linkDomain[id] ?? primaryDomain;
+  const baseUrlFor = (id: string) => (domainFor(id) ? `https://${domainFor(id)}` : origin);
 
   const pulseLink = (linkId: string) => {
     setPulseIds((prev) => {
