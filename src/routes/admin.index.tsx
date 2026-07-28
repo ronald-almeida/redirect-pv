@@ -651,9 +651,35 @@ function LinksPage() {
                           </td>
                           <td className="px-3 py-4">
                             <div className="flex items-center justify-end gap-0.5">
+                              {activeDomains.length > 0 && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger
+                                    title="Domínio para copiar"
+                                    className="mr-1 inline-flex max-w-[132px] items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1 text-[10.5px] font-medium text-muted-foreground outline-none hover:text-foreground"
+                                  >
+                                    <Globe className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">{domainFor(l.id) || "—"}</span>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-56">
+                                    <div className="px-2 py-1.5 text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                                      Domínio para copiar
+                                    </div>
+                                    {activeDomains.map((d) => (
+                                      <DropdownMenuItem
+                                        key={d.id}
+                                        onClick={() => setLinkDomain((prev) => ({ ...prev, [l.id]: d.domain }))}
+                                      >
+                                        <span className={cn("h-2 w-2 rounded-full", domainFor(l.id) === d.domain ? "bg-primary" : "bg-muted-foreground/40")} />
+                                        {d.domain}
+                                        {d.is_primary && <span className="ml-auto text-[10px] text-primary">principal</span>}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                               <button
-                                onClick={() => copyLink(l.slug)}
-                                title="Copiar"
+                                onClick={() => copyLink(l)}
+                                title={`Copiar ${baseUrlFor(l.id)}/${l.slug}`}
                                 className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
                               >
                                 {copiedSlug === l.slug ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
