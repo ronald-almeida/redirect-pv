@@ -164,7 +164,17 @@ function LinksPage() {
   useEffect(() => {
     setOrigin(typeof window !== "undefined" ? window.location.origin : "");
     void loadLinks();
+    void loadDomains();
   }, []);
+
+  async function loadDomains() {
+    const { data } = await supabase
+      .from("domains")
+      .select("*")
+      .order("is_primary", { ascending: false })
+      .order("domain", { ascending: true });
+    setDomains((data ?? []) as DomainRow[]);
+  }
 
   useEffect(() => { void loadClicks(); }, [range.start?.getTime(), range.end?.getTime()]);
 
