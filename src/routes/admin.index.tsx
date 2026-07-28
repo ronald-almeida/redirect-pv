@@ -36,6 +36,7 @@ import { type ClickRow, type LinkAgg, aggregate } from "@/lib/analytics";
 import { type DateRange } from "@/lib/date-range";
 import { adminPeriodToRange } from "@/lib/admin-period";
 import { cn } from "@/lib/utils";
+import type { DomainRow } from "@/routes/admin.domains";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({ meta: [{ title: "Links · CloakPanel" }] }),
