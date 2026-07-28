@@ -26,7 +26,7 @@ import {
 import {
   Copy, Check, ExternalLink, MoreHorizontal, Plus, Trash2, Files, Settings2,
   MousePointerClick, Activity, Link2, Target, BarChart3, SlidersHorizontal,
-  Search as SearchIcon, ChevronLeft, ChevronRight,
+  Search as SearchIcon, ChevronLeft, ChevronRight, Globe,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
@@ -36,6 +36,7 @@ import { type ClickRow, type LinkAgg, aggregate } from "@/lib/analytics";
 import { type DateRange } from "@/lib/date-range";
 import { adminPeriodToRange } from "@/lib/admin-period";
 import { cn } from "@/lib/utils";
+import type { DomainRow } from "@/routes/admin.domains";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({ meta: [{ title: "Links · CloakPanel" }] }),
@@ -130,7 +131,17 @@ function LinksPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | "real" | "waiting">("all");
   const [page, setPage] = useState(1);
   const [pulseIds, setPulseIds] = useState<Set<string>>(new Set());
+  const [domains, setDomains] = useState<DomainRow[]>([]);
+  const [linkDomain, setLinkDomain] = useState<Record<string, string>>({});
   const pageSize = 10;
+
+  const activeDomains = useMemo(() => domains.filter((d) => d.active), [domains]);
+  const primaryDomain = useMemo(
+    () => domains.find((d) => d.is_primary && d.active)?.domain ?? activeDomains[0]?.domain ?? "",
+    [domains, activeDomains],
+  );
+  const domainFor = (id: string) => linkDomain[id] ?? primaryDomain;
+  const baseUrlFor = (id: string) => (domainFor(id) ? `https://${domainFor(id)}` : origin);
 
   const pulseLink = (linkId: string) => {
     setPulseIds((prev) => {
@@ -153,7 +164,17 @@ function LinksPage() {
   useEffect(() => {
     setOrigin(typeof window !== "undefined" ? window.location.origin : "");
     void loadLinks();
+    void loadDomains();
   }, []);
+
+  async function loadDomains() {
+    const { data } = await supabase
+      .from("domains")
+      .select("*")
+      .order("is_primary", { ascending: false })
+      .order("domain", { ascending: true });
+    setDomains((data ?? []) as DomainRow[]);
+  }
 
   useEffect(() => { void loadClicks(); }, [range.start?.getTime(), range.end?.getTime()]);
 
@@ -382,10 +403,10 @@ function LinksPage() {
     purgeEdgeCache(l.slug);
   };
 
-  const copyLink = (slug: string) => {
-    navigator.clipboard.writeText(`${origin}/${slug}`);
-    setCopiedSlug(slug);
-    setTimeout(() => setCopiedSlug((s) => (s === slug ? null : s)), 1500);
+  const copyLink = (link: LinkRow) => {
+    navigator.clipboard.writeText(`${baseUrlFor(link.id)}/${link.slug}`);
+    setCopiedSlug(link.slug);
+    setTimeout(() => setCopiedSlug((s) => (s === link.slug ? null : s)), 1500);
   };
 
   const persistEditing = async (patch: Partial<LinkRow>) => {
@@ -630,9 +651,35 @@ function LinksPage() {
                           </td>
                           <td className="px-3 py-4">
                             <div className="flex items-center justify-end gap-0.5">
+                              {activeDomains.length > 0 && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger
+                                    title="Domínio para copiar"
+                                    className="mr-1 inline-flex max-w-[132px] items-center gap-1 rounded-md border border-border bg-secondary/50 px-2 py-1 text-[10.5px] font-medium text-muted-foreground outline-none hover:text-foreground"
+                                  >
+                                    <Globe className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">{domainFor(l.id) || "—"}</span>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-56">
+                                    <div className="px-2 py-1.5 text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                                      Domínio para copiar
+                                    </div>
+                                    {activeDomains.map((d) => (
+                                      <DropdownMenuItem
+                                        key={d.id}
+                                        onClick={() => setLinkDomain((prev) => ({ ...prev, [l.id]: d.domain }))}
+                                      >
+                                        <span className={cn("h-2 w-2 rounded-full", domainFor(l.id) === d.domain ? "bg-primary" : "bg-muted-foreground/40")} />
+                                        {d.domain}
+                                        {d.is_primary && <span className="ml-auto text-[10px] text-primary">principal</span>}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                               <button
-                                onClick={() => copyLink(l.slug)}
-                                title="Copiar"
+                                onClick={() => copyLink(l)}
+                                title={`Copiar ${baseUrlFor(l.id)}/${l.slug}`}
                                 className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
                               >
                                 {copiedSlug === l.slug ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}

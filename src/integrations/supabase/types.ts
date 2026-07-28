@@ -70,6 +70,30 @@ export type Database = {
           },
         ]
       }
+      domains: {
+        Row: {
+          active: boolean
+          created_at: string
+          domain: string
+          id: string
+          is_primary: boolean
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          domain: string
+          id?: string
+          is_primary?: boolean
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          domain?: string
+          id?: string
+          is_primary?: boolean
+        }
+        Relationships: []
+      }
       links: {
         Row: {
           ab_test: boolean
