@@ -26,7 +26,7 @@ import {
 import {
   Copy, Check, ExternalLink, MoreHorizontal, Plus, Trash2, Files, Settings2,
   MousePointerClick, Activity, Link2, Target, BarChart3, SlidersHorizontal,
-  Search as SearchIcon, ChevronLeft, ChevronRight,
+  Search as SearchIcon, ChevronLeft, ChevronRight, Globe,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
