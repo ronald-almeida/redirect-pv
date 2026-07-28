@@ -4,6 +4,7 @@ import {
   BarChart3,
   Activity,
   ScrollText,
+  Globe,
   Settings,
   Search,
   ChevronDown,
