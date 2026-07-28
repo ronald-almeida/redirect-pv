@@ -403,10 +403,10 @@ function LinksPage() {
     purgeEdgeCache(l.slug);
   };
 
-  const copyLink = (slug: string) => {
-    navigator.clipboard.writeText(`${origin}/${slug}`);
-    setCopiedSlug(slug);
-    setTimeout(() => setCopiedSlug((s) => (s === slug ? null : s)), 1500);
+  const copyLink = (link: LinkRow) => {
+    navigator.clipboard.writeText(`${baseUrlFor(link.id)}/${link.slug}`);
+    setCopiedSlug(link.slug);
+    setTimeout(() => setCopiedSlug((s) => (s === link.slug ? null : s)), 1500);
   };
 
   const persistEditing = async (patch: Partial<LinkRow>) => {
