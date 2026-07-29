@@ -263,12 +263,25 @@ export async function handleRedirect(
 ): Promise<Response> {
   const t0 = Date.now();
 
-  const link = await fetchLink(slug);
+  let search = "";
+  try {
+    search = new URL(request.url).search;
+  } catch {
+    /* ignore */
+  }
+
+  console.log("[redirect] slug:", slug, "search:", search);
+
+  const link = await fetchLink(slug, search);
+
+  console.log("[redirect] link found:", JSON.stringify(link));
+  console.log("[redirect] mode:", link?.mode, "real_url:", link?.real_url, "active:", link?.active);
 
   if (!link) {
     const ms = Date.now() - t0;
     return waitingHtml(null, ms);
   }
+
 
   const ua = request.headers.get("user-agent") || "";
   const isBot = BOT_REGEX.test(ua);
