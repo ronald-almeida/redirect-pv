@@ -97,17 +97,50 @@ function pgRest(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-async function fetchLink(slug: string): Promise<LinkRow | null> {
+async function fetchOne(query: string): Promise<LinkRow | null> {
   try {
-    const r = await pgRest(
-      `links?slug=eq.${encodeURIComponent(slug)}&select=${LINK_COLUMNS}&limit=1`,
-    );
+    const r = await pgRest(query);
     if (!r.ok) return null;
     return (await r.json()) as LinkRow;
   } catch {
     return null;
   }
 }
+
+/**
+ * Resolve a slug tolerantly:
+ * 1. exact match on the full path (+ query string, since some slugs contain "?")
+ * 2. exact match on the bare path
+ * 3. exact match on the last path segment
+ * 4. suffix match (slug stored as a full pasted URL, e.g. "https//dom.com/abc")
+ */
+async function fetchLink(slug: string, search: string): Promise<LinkRow | null> {
+  const bare = slug.replace(/^\/+/, "");
+  const withSearch = bare + (search || "");
+  const last = bare.split("/").filter(Boolean).pop() || bare;
+
+  const candidates = Array.from(new Set([withSearch, bare, last, last + (search || "")])).filter(
+    Boolean,
+  );
+
+  for (const c of candidates) {
+    const row = await fetchOne(
+      `links?slug=eq.${encodeURIComponent(c)}&select=${LINK_COLUMNS}&limit=1`,
+    );
+    if (row) return row;
+  }
+
+  // Suffix fallback: stored slug ends with the requested last segment.
+  if (last) {
+    const row = await fetchOne(
+      `links?slug=like.*${encodeURIComponent(last)}*&select=${LINK_COLUMNS}&limit=1`,
+    );
+    if (row) return row;
+  }
+
+  return null;
+}
+
 
 // ── Destination resolution (pure CPU, no I/O) ──────────────────────────────
 type Pick = { kind: "real"; url: string; mode: string } | { kind: "waiting"; mode: string };
@@ -230,12 +263,25 @@ export async function handleRedirect(
 ): Promise<Response> {
   const t0 = Date.now();
 
-  const link = await fetchLink(slug);
+  let search = "";
+  try {
+    search = new URL(request.url).search;
+  } catch {
+    /* ignore */
+  }
+
+  console.log("[redirect] slug:", slug, "search:", search);
+
+  const link = await fetchLink(slug, search);
+
+  console.log("[redirect] link found:", JSON.stringify(link));
+  console.log("[redirect] mode:", link?.mode, "real_url:", link?.real_url, "active:", link?.active);
 
   if (!link) {
     const ms = Date.now() - t0;
     return waitingHtml(null, ms);
   }
+
 
   const ua = request.headers.get("user-agent") || "";
   const isBot = BOT_REGEX.test(ua);
