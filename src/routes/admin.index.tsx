@@ -335,15 +335,15 @@ function LinksPage() {
     return { ok, fail, total };
   }, [clicks]);
 
-  const SLUG_RE = /^[a-z0-9-_]+$/;
+  const SLUG_RE = /^[a-zA-Z0-9_\-\.\/\?=]+$/;
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setNewSlugError(null);
-    const slug = newSlug.trim().toLowerCase();
+    const slug = newSlug.trim();
     if (!slug) { setNewSlugError("Informe um slug."); return; }
     if (!SLUG_RE.test(slug)) {
-      setNewSlugError("Use apenas letras minúsculas, números e hífens.");
+      setNewSlugError("Use letras, números, hífens, underscores, barras e pontos");
       return;
     }
     setCreating(true);
@@ -418,7 +418,7 @@ function LinksPage() {
 
   const saveEditing = async () => {
     if (!editing) return;
-    const newSlug = editing.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
+    const newSlug = editing.slug.trim().replace(/[^a-zA-Z0-9_\-\.\/\?=]/g, "");
     const { error } = await supabase.from("links").update({
       slug: newSlug,
       name: editing.name?.trim() || null,
@@ -936,7 +936,7 @@ function LinksPage() {
               {newSlugError ? (
                 <p className="text-[11px] font-medium text-destructive">{newSlugError}</p>
               ) : (
-                <p className="text-[11px] text-muted-foreground">Apenas letras minúsculas, números e hífens. O link é criado em modo Espera.</p>
+                <p className="text-[11px] text-muted-foreground">Use letras, números, hífens, underscores, barras e pontos. O link é criado em modo Espera.</p>
               )}
             </div>
             <DialogFooter>

@@ -11,10 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminRouteImport } from './routes/admin'
-import { Route as SlugRouteImport } from './routes/$slug'
+import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as RSlugRouteImport } from './routes/r.$slug'
+import { Route as RSplatRouteImport } from './routes/r.$'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminLatencyRouteImport } from './routes/admin.latency'
 import { Route as AdminEventsRouteImport } from './routes/admin.events'
@@ -32,9 +32,9 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SlugRoute = SlugRouteImport.update({
-  id: '/$slug',
-  path: '/$slug',
+const SplatRoute = SplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -47,9 +47,9 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
-const RSlugRoute = RSlugRouteImport.update({
-  id: '/r/$slug',
-  path: '/r/$slug',
+const RSplatRoute = RSplatRouteImport.update({
+  id: '/r/$',
+  path: '/r/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -85,7 +85,7 @@ const ApiPublicHooksWarmupRoute = ApiPublicHooksWarmupRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/$slug': typeof SlugRoute
+  '/$': typeof SplatRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
@@ -93,27 +93,27 @@ export interface FileRoutesByFullPath {
   '/admin/events': typeof AdminEventsRoute
   '/admin/latency': typeof AdminLatencyRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/r/$slug': typeof RSlugRoute
+  '/r/$': typeof RSplatRoute
   '/admin/': typeof AdminIndexRoute
   '/api/public/hooks/warmup': typeof ApiPublicHooksWarmupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/$slug': typeof SlugRoute
+  '/$': typeof SplatRoute
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/domains': typeof AdminDomainsRoute
   '/admin/events': typeof AdminEventsRoute
   '/admin/latency': typeof AdminLatencyRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/r/$slug': typeof RSlugRoute
+  '/r/$': typeof RSplatRoute
   '/admin': typeof AdminIndexRoute
   '/api/public/hooks/warmup': typeof ApiPublicHooksWarmupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/$slug': typeof SlugRoute
+  '/$': typeof SplatRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
@@ -121,7 +121,7 @@ export interface FileRoutesById {
   '/admin/events': typeof AdminEventsRoute
   '/admin/latency': typeof AdminLatencyRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/r/$slug': typeof RSlugRoute
+  '/r/$': typeof RSplatRoute
   '/admin/': typeof AdminIndexRoute
   '/api/public/hooks/warmup': typeof ApiPublicHooksWarmupRoute
 }
@@ -129,7 +129,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/$slug'
+    | '/$'
     | '/admin'
     | '/login'
     | '/admin/analytics'
@@ -137,26 +137,26 @@ export interface FileRouteTypes {
     | '/admin/events'
     | '/admin/latency'
     | '/admin/settings'
-    | '/r/$slug'
+    | '/r/$'
     | '/admin/'
     | '/api/public/hooks/warmup'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/$slug'
+    | '/$'
     | '/login'
     | '/admin/analytics'
     | '/admin/domains'
     | '/admin/events'
     | '/admin/latency'
     | '/admin/settings'
-    | '/r/$slug'
+    | '/r/$'
     | '/admin'
     | '/api/public/hooks/warmup'
   id:
     | '__root__'
     | '/'
-    | '/$slug'
+    | '/$'
     | '/admin'
     | '/login'
     | '/admin/analytics'
@@ -164,17 +164,17 @@ export interface FileRouteTypes {
     | '/admin/events'
     | '/admin/latency'
     | '/admin/settings'
-    | '/r/$slug'
+    | '/r/$'
     | '/admin/'
     | '/api/public/hooks/warmup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SlugRoute: typeof SlugRoute
+  SplatRoute: typeof SplatRoute
   AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
-  RSlugRoute: typeof RSlugRoute
+  RSplatRoute: typeof RSplatRoute
   ApiPublicHooksWarmupRoute: typeof ApiPublicHooksWarmupRoute
 }
 
@@ -194,11 +194,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/$slug': {
-      id: '/$slug'
-      path: '/$slug'
-      fullPath: '/$slug'
-      preLoaderRoute: typeof SlugRouteImport
+    '/$': {
+      id: '/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -215,11 +215,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/r/$slug': {
-      id: '/r/$slug'
-      path: '/r/$slug'
-      fullPath: '/r/$slug'
-      preLoaderRoute: typeof RSlugRouteImport
+    '/r/$': {
+      id: '/r/$'
+      path: '/r/$'
+      fullPath: '/r/$'
+      preLoaderRoute: typeof RSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/settings': {
@@ -289,21 +289,12 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SlugRoute: SlugRoute,
+  SplatRoute: SplatRoute,
   AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
-  RSlugRoute: RSlugRoute,
+  RSplatRoute: RSplatRoute,
   ApiPublicHooksWarmupRoute: ApiPublicHooksWarmupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
