@@ -1,12 +1,19 @@
 import { Link } from "@tanstack/react-router";
 import { Bell, Globe, Hourglass, Plus, Search } from "lucide-react";
 
-const ACTIONS = [
+type QuickAction = {
+  to: "/admin/slugs" | "/admin/domains";
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  primary?: boolean;
+};
+
+const ACTIONS: QuickAction[] = [
   { to: "/admin/slugs", label: "Criar link", icon: Plus, primary: true },
   { to: "/admin/slugs", label: "Procurar link", icon: Search },
   { to: "/admin/domains", label: "Adicionar domínio", icon: Globe },
   { to: "/admin/slugs", label: "Links em espera", icon: Hourglass },
-] as const;
+];
 
 interface QuickActionsProps {
   onAlerts: () => void;
