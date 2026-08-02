@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/admin/shared/EmptyState";
 import { AccessTable, type AccessView } from "@/components/admin/events/AccessTable";
 import { AuditTable } from "@/components/admin/events/AuditTable";
 import { EventDetailsSheet } from "@/components/admin/events/EventDetailsSheet";
-import { PagerBar } from "@/components/admin/events/PagerBar";
+import { InfiniteFooter } from "@/components/admin/events/InfiniteFooter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -178,7 +178,7 @@ function EventsPage() {
               <Input
                 value={f.search}
                 onChange={(e) => access.patch({ search: e.target.value })}
-                placeholder="Buscar por slug, nome, domínio ou destino"
+                placeholder="Buscar por nome, slug, domínio ou URL"
                 className="h-10 flex-1 text-[16px] lg:text-[13px]"
               />
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:flex">
@@ -186,15 +186,14 @@ function EventsPage() {
                   value={f.result}
                   onValueChange={(v) => access.patch({ result: v as typeof f.result })}
                 >
-                  <SelectTrigger className="h-10 lg:w-[170px]">
+                  <SelectTrigger className="h-10 lg:w-[180px]">
                     <SelectValue placeholder="Resultado" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os resultados</SelectItem>
-                    <SelectItem value="redirected">Redirecionado</SelectItem>
-                    <SelectItem value="waiting">Página de espera</SelectItem>
-                    <SelectItem value="blocked">Bloqueado</SelectItem>
-                    <SelectItem value="error">Erro</SelectItem>
+                    <SelectItem value="redirected">✅ Redirecionado</SelectItem>
+                    <SelectItem value="waiting">🟡 Página de espera</SelectItem>
+                    <SelectItem value="error">🔴 Erro</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={f.domainId} onValueChange={(v) => access.patch({ domainId: v })}>
@@ -206,6 +205,19 @@ function EventsPage() {
                     {domains.map((d) => (
                       <SelectItem key={d.id} value={d.id}>
                         {d.domain}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={f.linkId} onValueChange={(v) => access.patch({ linkId: v })}>
+                  <SelectTrigger className="h-10 lg:w-[170px]">
+                    <SelectValue placeholder="Slug" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as slugs</SelectItem>
+                    {links.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        /{l.slug}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -255,6 +267,17 @@ function EventsPage() {
               </div>
             </div>
 
+            {access.liveCount > 0 && (
+              <div className="flex items-center gap-2 border-b border-border bg-primary/8 px-4 py-2 text-[12px] font-semibold text-primary">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                </span>
+                {access.liveCount} novo{access.liveCount > 1 ? "s" : ""} acesso
+                {access.liveCount > 1 ? "s" : ""} em tempo real
+              </div>
+            )}
+
             {views.length === 0 && !access.isLoading ? (
               <EmptyState
                 icon={Activity}
@@ -265,50 +288,58 @@ function EventsPage() {
               <AccessTable rows={views} onSelect={setSelected} />
             )}
 
-            <PagerBar
-              page={f.page}
-              pageSize={f.pageSize}
+            <InfiniteFooter
+              loaded={views.length}
               total={access.total}
-              loading={access.isLoading}
               noun="acessos"
-              onPage={(p) => access.patch({ page: p })}
+              hasMore={!!access.hasNextPage}
+              loading={access.isFetchingNextPage || access.isLoading}
+              onLoadMore={() => access.fetchNextPage()}
             />
           </section>
         ) : (
           <section className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row sm:items-center">
-              <Select
-                value={audit.filters.entity}
-                onValueChange={(v) => audit.patch({ entity: v as never })}
-              >
-                <SelectTrigger className="h-10 sm:w-[190px]">
-                  <SelectValue placeholder="Entidade" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as entidades</SelectItem>
-                  {(Object.keys(ENTITY_LABEL) as (keyof typeof ENTITY_LABEL)[]).map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {ENTITY_LABEL[k]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={audit.filters.action}
-                onValueChange={(v) => audit.patch({ action: v })}
-              >
-                <SelectTrigger className="h-10 sm:w-[220px]">
-                  <SelectValue placeholder="Ação" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as ações</SelectItem>
-                  {Object.entries(AUDIT_ACTION_LABEL).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>
-                      {v}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex flex-col gap-2 border-b border-border p-3 lg:flex-row lg:items-center">
+              <Input
+                value={audit.filters.search}
+                onChange={(e) => audit.patch({ search: e.target.value })}
+                placeholder="Buscar por nome, slug ou domínio"
+                className="h-10 flex-1 text-[16px] lg:text-[13px]"
+              />
+              <div className="grid grid-cols-2 gap-2 lg:flex">
+                <Select
+                  value={audit.filters.entity}
+                  onValueChange={(v) => audit.patch({ entity: v as never })}
+                >
+                  <SelectTrigger className="h-10 lg:w-[190px]">
+                    <SelectValue placeholder="Entidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as entidades</SelectItem>
+                    {(Object.keys(ENTITY_LABEL) as (keyof typeof ENTITY_LABEL)[]).map((k) => (
+                      <SelectItem key={k} value={k}>
+                        {ENTITY_LABEL[k]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={audit.filters.action}
+                  onValueChange={(v) => audit.patch({ action: v })}
+                >
+                  <SelectTrigger className="h-10 lg:w-[220px]">
+                    <SelectValue placeholder="Ação" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as ações</SelectItem>
+                    {Object.entries(AUDIT_ACTION_LABEL).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button variant="outline" size="sm" className="h-10" onClick={audit.reset}>
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                 Limpar
@@ -325,13 +356,13 @@ function EventsPage() {
               <AuditTable rows={audit.rows} />
             )}
 
-            <PagerBar
-              page={audit.filters.page}
-              pageSize={audit.filters.pageSize}
+            <InfiniteFooter
+              loaded={audit.rows.length}
               total={audit.total}
-              loading={audit.isLoading}
               noun="alterações"
-              onPage={(p) => audit.patch({ page: p })}
+              hasMore={!!audit.hasNextPage}
+              loading={audit.isFetchingNextPage || audit.isLoading}
+              onLoadMore={() => audit.fetchNextPage()}
             />
           </section>
         )}

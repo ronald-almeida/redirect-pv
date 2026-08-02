@@ -7,19 +7,24 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DateRange } from "@/lib/date-range";
 
-export type AccessResult = "redirected" | "waiting" | "blocked" | "error";
+/** Apenas três resultados operacionais são exibidos ao operador. */
+export type AccessResult = "redirected" | "waiting" | "error";
 
 export const RESULT_LABEL: Record<AccessResult, string> = {
   redirected: "Redirecionado",
   waiting: "Página de espera",
-  blocked: "Bloqueado",
   error: "Erro",
+};
+
+export const RESULT_ICON: Record<AccessResult, string> = {
+  redirected: "✅",
+  waiting: "🟡",
+  error: "🔴",
 };
 
 export const RESULT_TONE: Record<AccessResult, string> = {
   redirected: "bg-primary/12 text-primary border-primary/30",
   waiting: "bg-[#F59E0B]/12 text-[#F59E0B] border-[#F59E0B]/30",
-  blocked: "bg-muted text-muted-foreground border-border",
   error: "bg-destructive/12 text-destructive border-destructive/30",
 };
 
@@ -34,11 +39,14 @@ export interface AccessRow {
   host: string | null;
 }
 
-/** Deriva o resultado operacional a partir do modo registrado no clique. */
+/**
+ * Deriva o resultado operacional a partir do modo registrado no clique.
+ * Bloqueios por IP/país continuam sendo "página de espera" (foi o que o
+ * visitante viu); falhas técnicas viram "erro".
+ */
 export function resultOf(mode: string): AccessResult {
   const m = (mode ?? "").toLowerCase();
   if (m.startsWith("error") || m.includes("404") || m.includes("fail")) return "error";
-  if (m.includes("block") || m.includes("bot") || m.includes("deny")) return "blocked";
   if (m.startsWith("real") || m.startsWith("decoy")) return "redirected";
   return "waiting";
 }
@@ -50,9 +58,9 @@ export interface AccessFilters {
   device: string | "all";
   country: string | "all";
   search: string;
-  page: number;
-  pageSize: number;
 }
+
+export const ACCESS_PAGE_SIZE = 30;
 
 export const DEFAULT_ACCESS_FILTERS: AccessFilters = {
   result: "all",
@@ -61,8 +69,6 @@ export const DEFAULT_ACCESS_FILTERS: AccessFilters = {
   device: "all",
   country: "all",
   search: "",
-  page: 0,
-  pageSize: 25,
 };
 
 export function accessKey(range: DateRange, f: AccessFilters, linkIds: string[] | null) {
@@ -75,8 +81,6 @@ export function accessKey(range: DateRange, f: AccessFilters, linkIds: string[] 
     f.linkId,
     f.device,
     f.country,
-    f.page,
-    f.pageSize,
     linkIds?.join(",") ?? null,
   ] as const;
 }
@@ -86,6 +90,7 @@ const ACCESS_SELECT = "id, created_at, link_id, mode_at_click, redirect_ms, devi
 export interface AccessPage {
   rows: AccessRow[];
   total: number;
+  nextOffset: number | null;
 }
 
 /**
@@ -97,8 +102,9 @@ export async function fetchAccessPage(
   range: DateRange,
   f: AccessFilters,
   linkIds: string[] | null,
+  offset = 0,
 ): Promise<AccessPage> {
-  if (linkIds && linkIds.length === 0) return { rows: [], total: 0 };
+  if (linkIds && linkIds.length === 0) return { rows: [], total: 0, nextOffset: null };
 
   let q = supabase
     .from("clicks")
@@ -112,14 +118,27 @@ export async function fetchAccessPage(
   if (f.country !== "all") q = q.eq("country", f.country);
 
   if (f.result === "redirected") q = q.or("mode_at_click.like.real%,mode_at_click.like.decoy%");
-  else if (f.result === "waiting") q = q.like("mode_at_click", "waiting%");
-  else if (f.result === "blocked") q = q.or("mode_at_click.ilike.%block%,mode_at_click.ilike.%bot%");
-  else if (f.result === "error") q = q.or("mode_at_click.ilike.%error%,mode_at_click.ilike.%404%");
+  else if (f.result === "error")
+    q = q.or("mode_at_click.ilike.%error%,mode_at_click.ilike.%404%,mode_at_click.ilike.%fail%");
+  else if (f.result === "waiting")
+    q = q
+      .not("mode_at_click", "like", "real%")
+      .not("mode_at_click", "like", "decoy%")
+      .not("mode_at_click", "ilike", "%error%")
+      .not("mode_at_click", "ilike", "%404%")
+      .not("mode_at_click", "ilike", "%fail%");
 
-  const from = f.page * f.pageSize;
-  const { data, error, count } = await q.range(from, from + f.pageSize - 1);
+  const { data, error, count } = await q.range(offset, offset + ACCESS_PAGE_SIZE - 1);
   if (error) throw error;
-  return { rows: (data ?? []) as unknown as AccessRow[], total: count ?? 0 };
+
+  const rows = (data ?? []) as unknown as AccessRow[];
+  const loaded = offset + rows.length;
+  const total = count ?? loaded;
+  return {
+    rows,
+    total,
+    nextOffset: rows.length === ACCESS_PAGE_SIZE && loaded < total ? loaded : null,
+  };
 }
 
 /** Valores distintos para os selects de dispositivo/país (amostra recente). */

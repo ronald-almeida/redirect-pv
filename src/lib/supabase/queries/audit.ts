@@ -132,16 +132,14 @@ export interface AuditFilters {
   entity: AuditEntity | "all";
   action: string | "all";
   search: string;
-  page: number;
-  pageSize: number;
 }
+
+export const AUDIT_PAGE_SIZE = 30;
 
 export const DEFAULT_AUDIT_FILTERS: AuditFilters = {
   entity: "all",
   action: "all",
   search: "",
-  page: 0,
-  pageSize: 25,
 };
 
 export function auditKey(range: DateRange, f: AuditFilters) {
@@ -152,20 +150,23 @@ export function auditKey(range: DateRange, f: AuditFilters) {
     f.entity,
     f.action,
     f.search.trim().toLowerCase(),
-    f.page,
-    f.pageSize,
   ] as const;
 }
 
 export interface AuditPage {
   rows: AuditRow[];
   total: number;
+  nextOffset: number | null;
 }
 
 const AUDIT_SELECT =
   "id, created_at, action, actor, entity_type, entity_id, entity_label, link_id, slug, before_value, after_value, detail";
 
-export async function fetchAuditPage(range: DateRange, f: AuditFilters): Promise<AuditPage> {
+export async function fetchAuditPage(
+  range: DateRange,
+  f: AuditFilters,
+  offset = 0,
+): Promise<AuditPage> {
   let q = supabase
     .from("link_audit")
     .select(AUDIT_SELECT, { count: "exact" })
@@ -182,10 +183,30 @@ export async function fetchAuditPage(range: DateRange, f: AuditFilters): Promise
     q = q.or(`slug.ilike.${like},entity_label.ilike.${like},action.ilike.${like}`);
   }
 
-  const from = f.page * f.pageSize;
-  const { data, error, count } = await q.range(from, from + f.pageSize - 1);
+  const { data, error, count } = await q.range(offset, offset + AUDIT_PAGE_SIZE - 1);
   if (error) throw error;
-  return { rows: (data ?? []) as unknown as AuditRow[], total: count ?? 0 };
+
+  const rows = (data ?? []) as unknown as AuditRow[];
+  const loaded = offset + rows.length;
+  const total = count ?? loaded;
+  return {
+    rows,
+    total,
+    nextOffset: rows.length === AUDIT_PAGE_SIZE && loaded < total ? loaded : null,
+  };
+}
+
+/** Campos individuais de antes/depois, para exibição comparativa. */
+export function valuePairs(
+  before: Record<string, unknown> | null,
+  after: Record<string, unknown> | null,
+): { field: string; before: string; after: string }[] {
+  const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
+  return [...keys].map((k) => ({
+    field: FIELD_LABEL[k] ?? k,
+    before: formatVal(before?.[k] ?? null),
+    after: formatVal(after?.[k] ?? null),
+  }));
 }
 
 /** Texto curto e legível para um valor de auditoria. */

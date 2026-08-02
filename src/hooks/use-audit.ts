@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import type { DateRange } from "@/lib/date-range";
 import {
   auditKey,
@@ -8,25 +8,28 @@ import {
   type AuditFilters,
 } from "@/lib/supabase/queries/audit";
 
-/** Histórico de Alterações paginado — filtros executados no banco. */
+/** Histórico de Alterações com scroll infinito — filtros executados no banco. */
 export function useAudit(range: DateRange) {
   const [filters, setFilters] = useState<AuditFilters>(DEFAULT_AUDIT_FILTERS);
 
-  const patch = (p: Partial<AuditFilters>) =>
-    setFilters((f) => ({ ...f, ...p, page: p.page ?? 0 }));
+  const patch = (p: Partial<AuditFilters>) => setFilters((f) => ({ ...f, ...p }));
 
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: auditKey(range, filters),
-    queryFn: () => fetchAuditPage(range, filters),
+    queryFn: ({ pageParam }) => fetchAuditPage(range, filters, pageParam as number),
+    initialPageParam: 0,
+    getNextPageParam: (last) => last.nextOffset,
     enabled: !!range.start,
     staleTime: 15_000,
-    placeholderData: keepPreviousData,
   });
+
+  const pages = query.data?.pages ?? [];
+  const rows = useMemo(() => pages.flatMap((p) => p.rows), [pages]);
 
   return {
     ...query,
-    rows: query.data?.rows ?? [],
-    total: query.data?.total ?? 0,
+    rows,
+    total: pages[0]?.total ?? 0,
     filters,
     patch,
     reset: () => setFilters(DEFAULT_AUDIT_FILTERS),
