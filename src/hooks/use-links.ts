@@ -46,6 +46,19 @@ export function useLinkMutations() {
       mutationFn: ({ id, active }: { id: string; active: boolean }) => setLinkActive(id, active),
       onSuccess: invalidate,
     }),
+    setDomain: useMutation({
+      mutationFn: ({ id, domain_id }: { id: string; domain_id: string | null }) =>
+        setLinkDomain(id, domain_id),
+      onSuccess: invalidate,
+    }),
+    archive: useMutation({
+      mutationFn: (id: string) => archiveLink(id),
+      onSuccess: invalidate,
+    }),
+    restore: useMutation({
+      mutationFn: (id: string) => restoreLink(id),
+      onSuccess: invalidate,
+    }),
     duplicate: useMutation({
       mutationFn: ({ source, slugs }: { source: LinkRow; slugs: string[] }) =>
         duplicateLink(source, slugs),
