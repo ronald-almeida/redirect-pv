@@ -1,8 +1,18 @@
 import { useState } from "react";
-import { Archive, ArchiveRestore, Copy, Edit3, MoreHorizontal, Check } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Copy,
+  Edit3,
+  MoreHorizontal,
+  Check,
+  Play,
+  PauseCircle,
+} from "lucide-react";
 import type { DomainRow, LinkRow } from "@/lib/bigcloak";
 import { formatRel, nf } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { canActivate } from "@/lib/supabase/queries/links";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -26,6 +36,8 @@ interface SlugRowProps {
   onRestore: (l: LinkRow) => void;
   onDuplicate: (l: LinkRow) => void;
   onPickDomain: (l: LinkRow, domainId: string) => void;
+  onActivate: (l: LinkRow) => void;
+  onDeactivate: (l: LinkRow) => void;
 }
 
 function statusKind(l: LinkRow): "active" | "paused" | "waiting" {
