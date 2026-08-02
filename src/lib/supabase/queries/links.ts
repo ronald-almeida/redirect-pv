@@ -28,4 +28,87 @@ export interface CreateLinkInput {
   slug: string;
   name?: string | null;
   real_url?: string | null;
-  domain_id?:
+  domain_id?: string | null;
+}
+
+export async function createLink(input: CreateLinkInput) {
+  const real = input.real_url?.trim() || null;
+  const { error } = await supabase.from("links").insert({
+    slug: input.slug,
+    name: input.name?.trim() || null,
+    real_url: real,
+    mode: real ? "real" : "waiting",
+    domain_id: input.domain_id || null,
+  });
+  if (error) throw error;
+}
+
+export async function updateLink(id: string, patch: Partial<LinkRow>) {
+  const { error } = await supabase.from("links").update(patch as never).eq("id", id);
+  if (error) throw error;
+}
+
+export async function setLinkMode(id: string, mode: Mode) {
+  return updateLink(id, { mode });
+}
+
+export async function setLinkActive(id: string, active: boolean) {
+  return updateLink(id, { active });
+}
+
+export async function setLinkDomain(id: string, domain_id: string | null) {
+  return updateLink(id, { domain_id });
+}
+
+export async function archiveLink(id: string) {
+  const { error } = await supabase
+    .from("links")
+    .update({ archived_at: new Date().toISOString(), active: false } as never)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function restoreLink(id: string) {
+  const { error } = await supabase
+    .from("links")
+    .update({ archived_at: null } as never)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteLink(id: string) {
+  const { error } = await supabase.from("links").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/** Duplica um link gerando um slug livre `<base>-copy[-n]`. */
+export async function duplicateLink(source: LinkRow, existingSlugs: string[]) {
+  const base = source.slug.replace(/-copy(-\d+)?$/, "");
+  const taken = new Set(existingSlugs);
+  let candidate = `${base}-copy`;
+  let n = 2;
+  while (taken.has(candidate)) candidate = `${base}-copy-${n++}`;
+
+  const { error } = await supabase.from("links").insert({
+    slug: candidate,
+    name: source.name,
+    mode: source.mode,
+    real_url: source.real_url,
+    decoy_url: source.decoy_url,
+    page_title: source.page_title,
+    page_message: source.page_message,
+    page_icon: source.page_icon,
+    active: source.active,
+    domain_id: source.domain_id,
+  });
+  if (error) throw error;
+  return candidate;
+}
+
+/** Mensagem amigável para erros comuns do Postgres. */
+export function humanizeLinkError(err: unknown): string {
+  const e = err as { code?: string; message?: string } | null;
+  if (!e) return "Erro desconhecido.";
+  if (e.code === "23505") return "Este slug já existe. Escolha outro.";
+  return e.message ?? "Não foi possível concluir a operação.";
+}
