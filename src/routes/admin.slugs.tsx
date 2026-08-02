@@ -14,7 +14,8 @@ import { useClicks } from "@/hooks/use-clicks";
 import { useDomains } from "@/hooks/use-domains";
 import { useLinks, useLinkMutations, useLinksRealtime } from "@/hooks/use-links";
 import type { LinkRow } from "@/lib/bigcloak";
-import { humanizeLinkError } from "@/lib/supabase/queries/links";
+import { toast } from "sonner";
+import { canActivate, humanizeLinkError } from "@/lib/supabase/queries/links";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/slugs")({
