@@ -97,37 +97,37 @@
 
 .dark {
   /* Grafite */
-  --background: #0B0F0E;
+  --background: #0A0A0A;
   --foreground: #E9EFEB;
   --card: #121715;
   --card-foreground: #E9EFEB;
   --popover: #151B19;
   --popover-foreground: #E9EFEB;
   /* Verde esmeralda */
-  --primary: #34D399;
+  --primary: #13C286;
   --primary-foreground: #04120C;
   --secondary: #191F1D;
   --secondary-foreground: #E9EFEB;
   --muted: #151A19;
   --muted-foreground: #869089;
-  --accent: #34D399;
+  --accent: #13C286;
   --accent-foreground: #04120C;
   --destructive: #F87171;
   --destructive-foreground: #1A0808;
-  --success: #34D399;
+  --success: #13C286;
   --warning: #FBBF24;
   --info: #60A5FA;
   --border: #1E2523;
   --input: #1E2523;
-  --ring: #34D399;
-  --chart-1: #34D399;
+  --ring: #13C286;
+  --chart-1: #13C286;
   --chart-2: #60A5FA;
   --chart-3: #FBBF24;
   --chart-4: #2DD4BF;
   --chart-5: #A78BFA;
   --sidebar: #0D1211;
   --sidebar-foreground: #A2ADA6;
-  --sidebar-primary: #34D399;
+  --sidebar-primary: #13C286;
   --sidebar-primary-foreground: #04120C;
   --sidebar-accent: #171D1B;
   --sidebar-accent-foreground: #E9EFEB;
