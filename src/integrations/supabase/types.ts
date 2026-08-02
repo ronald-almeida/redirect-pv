@@ -14,12 +14,64 @@ export type Database = {
   }
   public: {
     Tables: {
+      alerts: {
+        Row: {
+          created_at: string
+          detail: string | null
+          domain_id: string | null
+          id: string
+          kind: string
+          link_id: string | null
+          read_at: string | null
+          severity: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          domain_id?: string | null
+          id?: string
+          kind: string
+          link_id?: string | null
+          read_at?: string | null
+          severity?: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          domain_id?: string | null
+          id?: string
+          kind?: string
+          link_id?: string | null
+          read_at?: string | null
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clicks: {
         Row: {
           cache_status: string | null
           country: string | null
           created_at: string
           device: string | null
+          host: string | null
           id: string
           ip: string | null
           is_vpn: boolean
@@ -35,6 +87,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           device?: string | null
+          host?: string | null
           id?: string
           ip?: string | null
           is_vpn?: boolean
@@ -50,6 +103,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           device?: string | null
+          host?: string | null
           id?: string
           ip?: string | null
           is_vpn?: boolean
@@ -73,26 +127,82 @@ export type Database = {
       domains: {
         Row: {
           active: boolean
+          cf_zone_id: string | null
+          check_error: string | null
           created_at: string
+          dns_status: string
           domain: string
           id: string
           is_primary: boolean
+          last_checked_at: string | null
+          notes: string | null
+          worker_status: string
         }
         Insert: {
           active?: boolean
+          cf_zone_id?: string | null
+          check_error?: string | null
           created_at?: string
+          dns_status?: string
           domain: string
           id?: string
           is_primary?: boolean
+          last_checked_at?: string | null
+          notes?: string | null
+          worker_status?: string
         }
         Update: {
           active?: boolean
+          cf_zone_id?: string | null
+          check_error?: string | null
           created_at?: string
+          dns_status?: string
           domain?: string
           id?: string
           is_primary?: boolean
+          last_checked_at?: string | null
+          notes?: string | null
+          worker_status?: string
         }
         Relationships: []
+      }
+      link_audit: {
+        Row: {
+          action: string
+          actor: string
+          created_at: string
+          detail: Json | null
+          id: string
+          link_id: string | null
+          slug: string | null
+        }
+        Insert: {
+          action: string
+          actor?: string
+          created_at?: string
+          detail?: Json | null
+          id?: string
+          link_id?: string | null
+          slug?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string
+          created_at?: string
+          detail?: Json | null
+          id?: string
+          link_id?: string | null
+          slug?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_audit_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "links"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       links: {
         Row: {
@@ -100,14 +210,19 @@ export type Database = {
           access_password: string | null
           active: boolean
           allowed_countries: string[] | null
+          archived_at: string | null
+          auto_activate: boolean
+          auto_activate_after: number
           avg_redirect_ms: number
           blocked_ips: string[] | null
           click_count: number
           click_limit: number | null
           created_at: string
           decoy_url: string | null
+          domain_id: string | null
           expires_at: string | null
           id: string
+          last_click_at: string | null
           last_redirect_ms: number
           mode: string
           name: string | null
@@ -121,20 +236,26 @@ export type Database = {
           rotation_index: number
           slug: string
           total_redirects: number
+          updated_at: string
         }
         Insert: {
           ab_test?: boolean
           access_password?: string | null
           active?: boolean
           allowed_countries?: string[] | null
+          archived_at?: string | null
+          auto_activate?: boolean
+          auto_activate_after?: number
           avg_redirect_ms?: number
           blocked_ips?: string[] | null
           click_count?: number
           click_limit?: number | null
           created_at?: string
           decoy_url?: string | null
+          domain_id?: string | null
           expires_at?: string | null
           id?: string
+          last_click_at?: string | null
           last_redirect_ms?: number
           mode?: string
           name?: string | null
@@ -148,20 +269,26 @@ export type Database = {
           rotation_index?: number
           slug: string
           total_redirects?: number
+          updated_at?: string
         }
         Update: {
           ab_test?: boolean
           access_password?: string | null
           active?: boolean
           allowed_countries?: string[] | null
+          archived_at?: string | null
+          auto_activate?: boolean
+          auto_activate_after?: number
           avg_redirect_ms?: number
           blocked_ips?: string[] | null
           click_count?: number
           click_limit?: number | null
           created_at?: string
           decoy_url?: string | null
+          domain_id?: string | null
           expires_at?: string | null
           id?: string
+          last_click_at?: string | null
           last_redirect_ms?: number
           mode?: string
           name?: string | null
@@ -175,21 +302,39 @@ export type Database = {
           rotation_index?: number
           slug?: string
           total_redirects?: number
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "links_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       settings: {
         Row: {
+          cf_account_id: string | null
+          cf_enabled: boolean
+          default_auto_activate_after: number
           default_waiting_url: string
           id: string
           updated_at: string
         }
         Insert: {
+          cf_account_id?: string | null
+          cf_enabled?: boolean
+          default_auto_activate_after?: number
           default_waiting_url?: string
           id?: string
           updated_at?: string
         }
         Update: {
+          cf_account_id?: string | null
+          cf_enabled?: boolean
+          default_auto_activate_after?: number
           default_waiting_url?: string
           id?: string
           updated_at?: string
