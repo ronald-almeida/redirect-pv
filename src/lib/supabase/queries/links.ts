@@ -24,12 +24,21 @@ export async function slugExists(slug: string): Promise<boolean> {
   return !!data;
 }
 
-export async function createLink(input: { slug: string; name?: string | null; real_url?: string | null }) {
+export interface CreateLinkInput {
+  slug: string;
+  name?: string | null;
+  real_url?: string | null;
+  domain_id?: string | null;
+}
+
+export async function createLink(input: CreateLinkInput) {
+  const real = input.real_url?.trim() || null;
   const { error } = await supabase.from("links").insert({
     slug: input.slug,
     name: input.name?.trim() || null,
-    real_url: input.real_url?.trim() || null,
-    mode: input.real_url?.trim() ? "real" : "waiting",
+    real_url: real,
+    mode: real ? "real" : "waiting",
+    domain_id: input.domain_id || null,
   });
   if (error) throw error;
 }
@@ -45,6 +54,26 @@ export async function setLinkMode(id: string, mode: Mode) {
 
 export async function setLinkActive(id: string, active: boolean) {
   return updateLink(id, { active });
+}
+
+export async function setLinkDomain(id: string, domain_id: string | null) {
+  return updateLink(id, { domain_id });
+}
+
+export async function archiveLink(id: string) {
+  const { error } = await supabase
+    .from("links")
+    .update({ archived_at: new Date().toISOString(), active: false } as never)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function restoreLink(id: string) {
+  const { error } = await supabase
+    .from("links")
+    .update({ archived_at: null } as never)
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export async function deleteLink(id: string) {
@@ -70,6 +99,7 @@ export async function duplicateLink(source: LinkRow, existingSlugs: string[]) {
     page_message: source.page_message,
     page_icon: source.page_icon,
     active: source.active,
+    domain_id: source.domain_id,
   });
   if (error) throw error;
   return candidate;
