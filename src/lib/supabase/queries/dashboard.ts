@@ -145,3 +145,16 @@ export async function fetchDashboardSeries(range: DateRange): Promise<DashClick[
   if (error) throw error;
   return (data ?? []) as unknown as DashClick[];
 }
+
+export const recentClicksKey = ["dashboard", "recent"] as const;
+
+/** Últimos acessos (apenas cliques reais — nunca eventos administrativos). */
+export async function fetchRecentClicks(limit = 20): Promise<DashClick[]> {
+  const { data, error } = await supabase
+    .from("clicks")
+    .select(DASH_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as unknown as DashClick[];
+}
