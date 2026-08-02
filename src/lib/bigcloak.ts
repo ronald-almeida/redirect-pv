@@ -33,14 +33,26 @@ export interface LinkRow {
 export interface DomainRow {
   id: string;
   domain: string;
+  description: string | null;
   active: boolean;
   is_primary: boolean;
+  archived_at: string | null;
   dns_status: string;
   worker_status: string;
+  /** Campos preparados para a futura integração com a API da Cloudflare. */
+  cf_zone_id: string | null;
+  cf_api_token_secret: string | null;
+  cf_dns_status: string;
+  cf_worker_status: string;
+  cf_ssl_status: string;
+  health_status: string;
+  last_health_at: string | null;
   last_checked_at: string | null;
   check_error: string | null;
+  notes: string | null;
   created_at: string;
 }
+
 
 export interface ClickRow {
   id?: string;
