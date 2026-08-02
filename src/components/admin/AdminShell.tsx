@@ -6,14 +6,11 @@ import {
   ScrollText,
   Globe,
   Settings,
-  Search,
   ChevronDown,
   ChevronUp,
   LogOut,
-  ShieldCheck,
+  MoreHorizontal,
   Calendar as CalendarIcon,
-  Sun,
-  Moon,
   Check,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -32,21 +29,33 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DateRange as RDPRange } from "react-day-picker";
 
+type NavTo =
+  | "/admin"
+  | "/admin/analytics"
+  | "/admin/latency"
+  | "/admin/events"
+  | "/admin/domains"
+  | "/admin/settings";
+
 type NavItem = {
-  to: "/admin" | "/admin/analytics" | "/admin/latency" | "/admin/events" | "/admin/domains" | "/admin/settings";
+  to: NavTo;
   label: string;
+  shortLabel: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-  badge?: string;
 };
 
 const NAV: NavItem[] = [
-  { to: "/admin", label: "Links", icon: LinkIcon },
-  { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/admin/latency", label: "Latência", icon: Activity },
-  { to: "/admin/events", label: "Eventos", icon: ScrollText },
-  { to: "/admin/domains", label: "Domínios", icon: Globe },
-  { to: "/admin/settings", label: "Configurações", icon: Settings },
+  { to: "/admin", label: "Links", shortLabel: "Links", icon: LinkIcon },
+  { to: "/admin/analytics", label: "Analytics", shortLabel: "Analytics", icon: BarChart3 },
+  { to: "/admin/latency", label: "Latência", shortLabel: "Latência", icon: Activity },
+  { to: "/admin/domains", label: "Domínios", shortLabel: "Domínios", icon: Globe },
+  { to: "/admin/events", label: "Eventos", shortLabel: "Eventos", icon: ScrollText },
+  { to: "/admin/settings", label: "Configurações", shortLabel: "Config.", icon: Settings },
 ];
+
+/** Itens fixos na barra inferior do celular; o resto entra em "Mais". */
+const MOBILE_PRIMARY = NAV.slice(0, 4);
+const MOBILE_OVERFLOW = NAV.slice(4);
 
 export type AdminPeriod = "today" | "yesterday" | "7d" | "30d" | "custom";
 
@@ -70,6 +79,14 @@ const PERIOD_LABEL: Record<AdminPeriod, string> = {
   custom: "Personalizado",
 };
 
+const PERIOD_SHORT: Record<AdminPeriod, string> = {
+  today: "Hoje",
+  yesterday: "Ontem",
+  "7d": "7 dias",
+  "30d": "30 dias",
+  custom: "Período",
+};
+
 const PERIOD_OPTIONS: AdminPeriod[] = ["today", "yesterday", "7d", "30d", "custom"];
 
 function fmtBrDate(ymd?: string) {
@@ -85,6 +102,25 @@ function toYmd(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+function isActive(pathname: string, to: NavTo) {
+  return to === "/admin" ? pathname === "/admin" : pathname.startsWith(to);
+}
+
+function BrandMark({ size = 36 }: { size?: number }) {
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <div className="absolute inset-0 rounded-[10px] bg-primary/20 blur-md" />
+      <img
+        src="/big-cloak-icon.png"
+        alt="Big Cloak"
+        width={size}
+        height={size}
+        className="relative h-full w-full rounded-[10px] object-cover"
+      />
+    </div>
+  );
+}
+
 export function AdminShell({
   children,
   period,
@@ -97,7 +133,6 @@ export function AdminShell({
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [email, setEmail] = useState<string>("");
-  const [light, setLight] = useState(false);
   const [periodOpen, setPeriodOpen] = useState(false);
 
   useEffect(() => {
@@ -109,8 +144,8 @@ export function AdminShell({
     navigate({ to: "/login" });
   };
 
-  const initials = (email || "AD").slice(0, 2).toUpperCase();
-  const displayName = email ? email.split("@")[0] : "Administrador";
+  const initials = (email || "BC").slice(0, 2).toUpperCase();
+  const displayName = email ? email.split("@")[0] : "Operador";
 
   const rangeSel = useMemo<RDPRange | undefined>(() => {
     if (period !== "custom") return undefined;
@@ -122,25 +157,28 @@ export function AdminShell({
   const periodButtonLabel =
     period === "custom" && customStart && customEnd
       ? `${fmtBrDate(customStart)} – ${fmtBrDate(customEnd)}`
-      : PERIOD_LABEL[period ?? "7d"];
+      : PERIOD_LABEL[period ?? "today"];
+
+  const currentTitle = NAV.find((n) => isActive(pathname, n.to))?.label ?? "Big Cloak";
+  const overflowActive = MOBILE_OVERFLOW.some((n) => isActive(pathname, n.to));
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      {/* Sidebar */}
-      <aside className="hidden md:flex w-[232px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+      {/* ── Sidebar (desktop) ─────────────────────────────────────────── */}
+      <aside className="hidden md:flex w-[236px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
         <div className="flex h-[68px] items-center gap-2.5 px-5">
-          <div className="relative flex h-9 w-9 items-center justify-center">
-            <div className="absolute inset-0 rounded-[10px] bg-primary/15 blur-md" />
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-primary/90 to-primary/60 text-primary-foreground shadow-[0_4px_16px_-4px_rgba(163,230,53,0.55)]">
-              <ShieldCheck className="h-5 w-5" strokeWidth={2.25} />
+          <BrandMark />
+          <div className="min-w-0 leading-tight">
+            <div className="text-[15.5px] font-extrabold tracking-tight">Big Cloak</div>
+            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              Redirect Engine
             </div>
           </div>
-          <span className="text-[16px] font-semibold tracking-tight">CloakPanel</span>
         </div>
 
-        <nav className="flex-1 px-3 pt-2 space-y-1">
+        <nav className="flex-1 space-y-1 px-3 pt-2">
           {NAV.map((item) => {
-            const active = item.to === "/admin" ? pathname === "/admin" : pathname.startsWith(item.to);
+            const active = isActive(pathname, item.to);
             return (
               <Link
                 key={item.to}
@@ -151,18 +189,18 @@ export function AdminShell({
                     ? "bg-primary/10 text-primary"
                     : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground",
                 )}
-                style={active ? { boxShadow: "0 0 0 1px rgba(163,230,53,0.18), 0 0 22px -8px rgba(163,230,53,0.55) inset" } : undefined}
               >
                 {active && (
-                  <span className="absolute -left-3 top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-r-full bg-primary shadow-[0_0_12px_rgba(163,230,53,0.8)]" />
+                  <span className="absolute -left-3 top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
                 )}
-                <item.icon className={cn("h-[18px] w-[18px] shrink-0", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} strokeWidth={active ? 2.25 : 2} />
+                <item.icon
+                  className={cn(
+                    "h-[18px] w-[18px] shrink-0",
+                    active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+                  )}
+                  strokeWidth={active ? 2.25 : 2}
+                />
                 <span className="flex-1">{item.label}</span>
-                {item.badge && (
-                  <span className="rounded-md bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                    {item.badge}
-                  </span>
-                )}
               </Link>
             );
           })}
@@ -171,19 +209,19 @@ export function AdminShell({
         <div className="px-3 pb-4">
           <DropdownMenu>
             <DropdownMenuTrigger className="group flex w-full items-center gap-2.5 rounded-[10px] border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-2 outline-none transition-colors hover:bg-sidebar-accent">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold text-foreground border border-border">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-secondary text-[11px] font-semibold text-foreground">
                 {initials}
               </div>
               <div className="min-w-0 flex-1 text-left">
                 <div className="truncate text-[12.5px] font-semibold">{displayName}</div>
-                <div className="truncate text-[10.5px] text-muted-foreground">CloakPanel</div>
+                <div className="truncate text-[10.5px] text-muted-foreground">Big Cloak</div>
               </div>
-              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+              <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-56">
               <DropdownMenuLabel className="text-xs">
-                <div className="font-semibold truncate">{email || displayName}</div>
-                <div className="text-muted-foreground font-normal">Operador</div>
+                <div className="truncate font-semibold">{email || displayName}</div>
+                <div className="font-normal text-muted-foreground">Operador</div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
@@ -192,7 +230,10 @@ export function AdminShell({
                   Configurações
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="text-destructive focus:text-destructive"
+              >
                 <LogOut className="h-3.5 w-3.5" />
                 Sair
               </DropdownMenuItem>
@@ -201,31 +242,49 @@ export function AdminShell({
         </div>
       </aside>
 
-      {/* Main column */}
+      {/* ── Coluna principal ──────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/85 backdrop-blur px-4 md:px-8">
-          <button className="md:hidden flex h-9 w-9 items-center justify-center rounded-md border border-border bg-secondary">
-            <Search className="h-4 w-4" />
-          </button>
+        <header className="safe-top sticky top-0 z-30 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-background/90 px-4 py-2.5 backdrop-blur md:h-[68px] md:py-0 md:px-8">
+          {/* Marca/título no mobile */}
+          <div className="flex min-w-0 items-center gap-2.5 md:hidden">
+            <BrandMark size={30} />
+            <div className="min-w-0">
+              <div className="truncate text-[14.5px] font-extrabold tracking-tight leading-tight">
+                {currentTitle}
+              </div>
+              <div className="truncate text-[10px] text-muted-foreground leading-tight">
+                Big Cloak
+              </div>
+            </div>
+          </div>
+          <div className="hidden md:block" />
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             {onPeriod && (
               <Popover open={periodOpen} onOpenChange={setPeriodOpen}>
                 <PopoverTrigger asChild>
                   <button
                     className={cn(
-                      "inline-flex items-center gap-2 rounded-full border bg-card px-4 py-2 text-[12.5px] font-medium outline-none transition-all",
-                      "border-border hover:border-primary/40 hover:bg-secondary hover:shadow-[0_0_0_4px_rgba(163,230,53,0.06)]",
+                      "tap inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 text-[12.5px] font-medium outline-none transition-all",
+                      "hover:border-primary/40 hover:bg-secondary",
                     )}
                   >
-                    <CalendarIcon className="h-3.5 w-3.5 text-primary" />
-                    <span className="tabular-nums">{periodButtonLabel}</span>
-                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span className="tabular-nums md:hidden">
+                      {period === "custom" && customStart
+                        ? fmtBrDate(customStart)
+                        : PERIOD_SHORT[period ?? "today"]}
+                    </span>
+                    <span className="hidden tabular-nums md:inline">{periodButtonLabel}</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-auto p-0 overflow-hidden">
-                  <div className="flex">
-                    <div className="w-44 border-r border-border py-2">
+                <PopoverContent
+                  align="end"
+                  className="w-[min(92vw,auto)] overflow-hidden p-0"
+                >
+                  <div className="flex flex-col sm:flex-row">
+                    <div className="border-b border-border py-2 sm:w-44 sm:border-b-0 sm:border-r">
                       {PERIOD_OPTIONS.map((p) => {
                         const active = period === p;
                         return (
@@ -236,8 +295,10 @@ export function AdminShell({
                               if (p !== "custom") setPeriodOpen(false);
                             }}
                             className={cn(
-                              "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[12.5px] transition-colors",
-                              active ? "bg-primary/10 text-primary font-semibold" : "text-foreground hover:bg-secondary",
+                              "flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-[13px] transition-colors",
+                              active
+                                ? "bg-primary/10 font-semibold text-primary"
+                                : "text-foreground hover:bg-secondary",
                             )}
                           >
                             {PERIOD_LABEL[p]}
@@ -250,7 +311,7 @@ export function AdminShell({
                       <div className="p-2">
                         <Calendar
                           mode="range"
-                          numberOfMonths={2}
+                          numberOfMonths={1}
                           selected={rangeSel}
                           onSelect={(r) => {
                             if (r?.from && r?.to && onCustomRange) {
@@ -260,11 +321,7 @@ export function AdminShell({
                           className={cn("pointer-events-auto")}
                         />
                         <div className="flex items-center justify-end gap-2 px-2 pb-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setPeriodOpen(false)}
-                          >
+                          <Button size="sm" variant="ghost" onClick={() => setPeriodOpen(false)}>
                             Fechar
                           </Button>
                           <Button
@@ -282,22 +339,14 @@ export function AdminShell({
               </Popover>
             )}
 
-            <button
-              onClick={() => setLight((v) => !v)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card hover:bg-secondary"
-              aria-label="Tema"
-            >
-              {light ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4 text-muted-foreground" />}
-            </button>
-
             {rightSlot}
 
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-full border border-border bg-card pl-1 pr-3 py-1 outline-none hover:bg-secondary">
+              <DropdownMenuTrigger className="tap hidden items-center gap-2.5 rounded-full border border-border bg-card py-1 pl-1 pr-3 outline-none hover:bg-secondary md:flex">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold">
                   {initials}
                 </div>
-                <div className="hidden sm:block text-left leading-tight">
+                <div className="text-left leading-tight">
                   <div className="text-[12px] font-semibold">{displayName}</div>
                   <div className="text-[10px] text-muted-foreground">Administrador</div>
                 </div>
@@ -305,8 +354,8 @@ export function AdminShell({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="text-xs">
-                  <div className="font-semibold truncate">{email || displayName}</div>
-                  <div className="text-muted-foreground font-normal">Operador</div>
+                  <div className="truncate font-semibold">{email || displayName}</div>
+                  <div className="font-normal text-muted-foreground">Operador</div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
@@ -315,7 +364,10 @@ export function AdminShell({
                     Configurações
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
+                <DropdownMenuItem
+                  onClick={handleSignOut}
+                  className="text-destructive focus:text-destructive"
+                >
                   <LogOut className="h-3.5 w-3.5" />
                   Sair
                 </DropdownMenuItem>
@@ -324,29 +376,62 @@ export function AdminShell({
           </div>
         </header>
 
-        {/* Mobile nav */}
-        <nav className="md:hidden border-b border-border bg-sidebar overflow-x-auto">
-          <div className="flex gap-1 px-3 py-2">
-            {NAV.map((item) => {
-              const active = item.to === "/admin" ? pathname === "/admin" : pathname.startsWith(item.to);
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={cn(
-                    "shrink-0 flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium",
-                    active ? "bg-primary/10 text-primary" : "text-sidebar-foreground",
-                  )}
-                >
-                  <item.icon className="h-3.5 w-3.5" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
+        {/* Conteúdo — padding inferior reserva espaço para a barra do celular */}
+        <main className="min-w-0 flex-1 pb-[76px] md:pb-0">{children}</main>
 
-        <main className="flex-1 min-w-0">{children}</main>
+        {/* ── Barra inferior (mobile) ────────────────────────────────── */}
+        <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-sidebar/95 pt-1.5 backdrop-blur md:hidden">
+          {MOBILE_PRIMARY.map((item) => {
+            const active = isActive(pathname, item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 px-1 py-1 text-[10px] font-semibold transition-colors",
+                  active ? "text-primary" : "text-muted-foreground",
+                )}
+              >
+                <item.icon className="h-[19px] w-[19px]" strokeWidth={active ? 2.4 : 2} />
+                <span className="truncate">{item.shortLabel}</span>
+              </Link>
+            );
+          })}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 px-1 py-1 text-[10px] font-semibold outline-none transition-colors",
+                overflowActive ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              <MoreHorizontal className="h-[19px] w-[19px]" />
+              <span>Mais</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="end" className="mb-2 w-52">
+              <DropdownMenuLabel className="text-xs">
+                <div className="truncate font-semibold">{email || displayName}</div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {MOBILE_OVERFLOW.map((item) => (
+                <DropdownMenuItem key={item.to} asChild>
+                  <Link to={item.to}>
+                    <item.icon className="h-3.5 w-3.5" />
+                    {item.label}
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="text-destructive focus:text-destructive"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </nav>
       </div>
     </div>
   );

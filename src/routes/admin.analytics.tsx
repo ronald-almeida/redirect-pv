@@ -13,7 +13,7 @@ import { TrendingUp, Globe, Smartphone, Monitor } from "lucide-react";
 import { IndividualClicks } from "@/components/admin/IndividualClicks";
 
 export const Route = createFileRoute("/admin/analytics")({
-  head: () => ({ meta: [{ title: "Analytics · CloakPanel" }] }),
+  head: () => ({ meta: [{ title: "Analytics · Big Cloak" }] }),
   component: AnalyticsPage,
 });
 

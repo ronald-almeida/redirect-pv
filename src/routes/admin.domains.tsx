@@ -17,7 +17,7 @@ import { Globe, Plus, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/domains")({
-  head: () => ({ meta: [{ title: "Domínios · CloakPanel" }] }),
+  head: () => ({ meta: [{ title: "Domínios · Big Cloak" }] }),
   component: DomainsPage,
 });
 

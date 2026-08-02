@@ -39,7 +39,7 @@ import { cn } from "@/lib/utils";
 import type { DomainRow } from "@/routes/admin.domains";
 
 export const Route = createFileRoute("/admin/")({
-  head: () => ({ meta: [{ title: "Links · CloakPanel" }] }),
+  head: () => ({ meta: [{ title: "Links · Big Cloak" }] }),
   component: LinksPage,
 });
 
@@ -295,7 +295,7 @@ function LinksPage() {
     }
     const total = counts.real + counts.decoy + counts.waiting;
     return [
-      { name: "Real",   value: counts.real,    pct: total ? counts.real / total : 0,    color: "#A3E635" },
+      { name: "Real",   value: counts.real,    pct: total ? counts.real / total : 0,    color: "#34D399" },
       { name: "Isca",   value: counts.decoy,   pct: total ? counts.decoy / total : 0,   color: "#F59E0B" },
       { name: "Espera", value: counts.waiting, pct: total ? counts.waiting / total : 0, color: "#A78BFA" },
     ];
@@ -434,7 +434,7 @@ function LinksPage() {
   };
 
   const modeAccent: Record<Mode, { tile: string; ring: string; icon: string }> = {
-    real:    { tile: "bg-primary/12 text-primary",         ring: "ring-primary/40 shadow-[0_0_20px_-6px_rgba(163,230,53,0.55)]",   icon: "#A3E635" },
+    real:    { tile: "bg-primary/12 text-primary",         ring: "ring-primary/40 shadow-[0_0_20px_-6px_rgba(52,211,153,0.55)]",   icon: "#34D399" },
     decoy:   { tile: "bg-[#F59E0B]/12 text-[#F59E0B]",     ring: "ring-[#F59E0B]/40 shadow-[0_0_20px_-6px_rgba(245,158,11,0.55)]", icon: "#F59E0B" },
     waiting: { tile: "bg-[#A78BFA]/12 text-[#A78BFA]",     ring: "ring-[#A78BFA]/40 shadow-[0_0_20px_-6px_rgba(167,139,250,0.55)]",icon: "#A78BFA" },
   };
@@ -532,7 +532,7 @@ function LinksPage() {
                   className={cn(
                     "rounded-full px-4 py-1.5 text-[11.5px] font-semibold transition-all",
                     typeFilter === k
-                      ? "bg-primary text-primary-foreground shadow-[0_2px_10px_-2px_rgba(163,230,53,0.55)]"
+                      ? "bg-primary text-primary-foreground shadow-[0_2px_10px_-2px_rgba(52,211,153,0.55)]"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -591,7 +591,7 @@ function LinksPage() {
                       const sparkData = buildSparkSeries(linkClicks, range, 14).map((v, i) => ({ i, v }));
 
                       return (
-                        <tr key={l.id} className={cn("group border-t border-border/60 odd:bg-transparent even:bg-secondary/20 hover:bg-primary/[0.04] hover:shadow-[inset_3px_0_0_0_rgba(163,230,53,0.55)] transition-all", pulseIds.has(l.id) && "bg-primary/[0.08] shadow-[inset_3px_0_0_0_rgba(163,230,53,0.9)]")}>
+                        <tr key={l.id} className={cn("group border-t border-border/60 odd:bg-transparent even:bg-secondary/20 hover:bg-primary/[0.04] hover:shadow-[inset_3px_0_0_0_rgba(52,211,153,0.55)] transition-all", pulseIds.has(l.id) && "bg-primary/[0.08] shadow-[inset_3px_0_0_0_rgba(52,211,153,0.9)]")}>
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
                               <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", accent.tile, accent.ring)}>
@@ -694,7 +694,7 @@ function LinksPage() {
                               <button
                                 onClick={() => setEditing(l)}
                                 title="Editar"
-                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11.5px] font-semibold text-primary transition-all hover:bg-primary/20 hover:border-primary/60 hover:shadow-[0_0_12px_-2px_rgba(163,230,53,0.55)]"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11.5px] font-semibold text-primary transition-all hover:bg-primary/20 hover:border-primary/60 hover:shadow-[0_0_12px_-2px_rgba(52,211,153,0.55)]"
                               >
                                 <Settings2 className="h-3.5 w-3.5" />
                                 Editar
@@ -835,8 +835,8 @@ function LinksPage() {
                 <AreaChart data={latencySeries}>
                   <defs>
                     <linearGradient id="lat-fill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#A3E635" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#A3E635" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#34D399" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#34D399" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#1B2029" strokeDasharray="3 3" vertical={false} />
@@ -847,7 +847,7 @@ function LinksPage() {
                     labelStyle={{ color: "#F5F7F5" }}
                     formatter={(v: number) => [`${v}ms`, "Latência"]}
                   />
-                  <Area type="monotone" dataKey="ms" stroke="#A3E635" strokeWidth={2} fill="url(#lat-fill)" isAnimationActive={false} />
+                  <Area type="monotone" dataKey="ms" stroke="#34D399" strokeWidth={2} fill="url(#lat-fill)" isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -865,7 +865,7 @@ function LinksPage() {
                   <PieChart>
                     <Pie
                       data={[
-                        { name: "Sucesso", value: successStats.ok, color: "#A3E635" },
+                        { name: "Sucesso", value: successStats.ok, color: "#34D399" },
                         { name: "Falhas", value: Math.max(successStats.fail, successStats.total ? 0 : 1), color: "#F43F5E" },
                       ]}
                       dataKey="value"
@@ -874,7 +874,7 @@ function LinksPage() {
                       paddingAngle={2}
                       stroke="none"
                     >
-                      <Cell fill="#A3E635" />
+                      <Cell fill="#34D399" />
                       <Cell fill="#F43F5E" />
                     </Pie>
                   </PieChart>

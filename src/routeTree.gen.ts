@@ -20,6 +20,7 @@ import { Route as AdminLatencyRouteImport } from './routes/admin.latency'
 import { Route as AdminEventsRouteImport } from './routes/admin.events'
 import { Route as AdminDomainsRouteImport } from './routes/admin.domains'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
+import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicHooksWarmupRouteImport } from './routes/api/public/hooks/warmup'
 
 const LoginRoute = LoginRouteImport.update({
@@ -77,6 +78,11 @@ const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AdminRoute,
 } as any)
+const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
+  id: '/api/public/health',
+  path: '/api/public/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksWarmupRoute = ApiPublicHooksWarmupRouteImport.update({
   id: '/api/public/hooks/warmup',
   path: '/api/public/hooks/warmup',
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/r/$': typeof RSplatRoute
   '/admin/': typeof AdminIndexRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/hooks/warmup': typeof ApiPublicHooksWarmupRoute
 }
 export interface FileRoutesByTo {
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/r/$': typeof RSplatRoute
   '/admin': typeof AdminIndexRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/hooks/warmup': typeof ApiPublicHooksWarmupRoute
 }
 export interface FileRoutesById {
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/r/$': typeof RSplatRoute
   '/admin/': typeof AdminIndexRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/hooks/warmup': typeof ApiPublicHooksWarmupRoute
 }
 export interface FileRouteTypes {
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/r/$'
     | '/admin/'
+    | '/api/public/health'
     | '/api/public/hooks/warmup'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -152,6 +162,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/r/$'
     | '/admin'
+    | '/api/public/health'
     | '/api/public/hooks/warmup'
   id:
     | '__root__'
@@ -166,6 +177,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/r/$'
     | '/admin/'
+    | '/api/public/health'
     | '/api/public/hooks/warmup'
   fileRoutesById: FileRoutesById
 }
@@ -175,6 +187,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
   RSplatRoute: typeof RSplatRoute
+  ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicHooksWarmupRoute: typeof ApiPublicHooksWarmupRoute
 }
 
@@ -257,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/api/public/health': {
+      id: '/api/public/health'
+      path: '/api/public/health'
+      fullPath: '/api/public/health'
+      preLoaderRoute: typeof ApiPublicHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/warmup': {
       id: '/api/public/hooks/warmup'
       path: '/api/public/hooks/warmup'
@@ -293,17 +313,9 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
   RSplatRoute: RSplatRoute,
+  ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicHooksWarmupRoute: ApiPublicHooksWarmupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

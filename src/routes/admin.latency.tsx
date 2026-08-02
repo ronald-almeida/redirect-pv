@@ -14,7 +14,7 @@ import { Activity, Zap, Play, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/latency")({
-  head: () => ({ meta: [{ title: "Latência · CloakPanel" }] }),
+  head: () => ({ meta: [{ title: "Latência · Big Cloak" }] }),
   component: LatencyPage,
 });
 
