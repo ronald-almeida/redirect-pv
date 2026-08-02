@@ -1,5 +1,19 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { LinkRow, Mode } from "@/lib/bigcloak";
+import { diff, logAudit, pick } from "@/lib/supabase/queries/audit";
+
+/** Campos de link registrados no Histórico de Alterações. */
+const AUDITED: (keyof LinkRow)[] = [
+  "name",
+  "slug",
+  "mode",
+  "real_url",
+  "domain_id",
+  "active",
+  "archived_at",
+  "auto_activate",
+  "auto_activate_after",
+];
 
 /** Valores padrão da página de espera de um novo slug. */
 export const LINK_DEFAULTS = {
@@ -33,14 +47,59 @@ export interface CreateLinkInput {
 
 export async function createLink(input: CreateLinkInput) {
   const real = input.real_url?.trim() || null;
-  const { error } = await supabase.from("links").insert({
-    slug: input.slug,
-    name: input.name?.trim() || null,
-    real_url: real,
-    mode: real ? "real" : "waiting",
-    domain_id: input.domain_id || null,
-  });
+  const { data, error } = await supabase
+    .from("links")
+    .insert({
+      slug: input.slug,
+      name: input.name?.trim() || null,
+      real_url: real,
+      mode: real ? "real" : "waiting",
+      domain_id: input.domain_id || null,
+    })
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  await logAudit({
+    action: "link_created",
+    entity: "link",
+    entityId: data?.id ?? null,
+    linkId: data?.id ?? null,
+    slug: input.slug,
+    label: input.name?.trim() || input.slug,
+    before: null,
+    after: {
+      slug: input.slug,
+      name: input.name?.trim() || null,
+      real_url: real,
+      mode: real ? "real" : "waiting",
+      domain_id: input.domain_id || null,
+    },
+  });
+}
+
+/** Edição com registro de valor anterior e novo. */
+export async function updateLinkAudited(link: LinkRow, patch: Partial<LinkRow>) {
+  const before = pick(link, AUDITED);
+  await updateLink(link.id, patch);
+  const after = pick({ ...link, ...patch } as LinkRow, AUDITED);
+  const d = diff(before, after);
+  if (Object.keys(d.after).length === 0) return;
+  const action =
+    "real_url" in d.after
+      ? "link_url_changed"
+      : "domain_id" in d.after
+        ? "link_domain_changed"
+        : "link_updated";
+  await logAudit({
+    action,
+    entity: "link",
+    entityId: link.id,
+    linkId: link.id,
+    slug: link.slug,
+    label: link.name?.trim() || link.slug,
+    before: d.before,
+    after: d.after,
+  });
 }
 
 export async function updateLink(id: string, patch: Partial<LinkRow>) {
@@ -58,17 +117,6 @@ export async function setLinkActive(id: string, active: boolean) {
 
 export async function setLinkDomain(id: string, domain_id: string | null) {
   return updateLink(id, { domain_id });
-}
-
-/** Registra uma ação no histórico interno (link_audit). */
-async function logAudit(link: LinkRow, action: string, detail: Record<string, unknown>) {
-  await supabase.from("link_audit").insert({
-    link_id: link.id,
-    slug: link.slug,
-    action,
-    detail: detail as never,
-    actor: "operator",
-  });
 }
 
 export class MissingRealUrlError extends Error {
@@ -95,10 +143,15 @@ export async function activateLink(link: LinkRow) {
     archived_at: null,
     updated_at: new Date().toISOString(),
   } as Partial<LinkRow>);
-  await logAudit(link, "manual_activate", {
-    at: new Date().toISOString(),
-    from_mode: link.mode,
-    real_url: link.real_url,
+  await logAudit({
+    action: "manual_activate",
+    entity: "link",
+    entityId: link.id,
+    linkId: link.id,
+    slug: link.slug,
+    label: link.name?.trim() || link.slug,
+    before: { mode: link.mode, active: link.active },
+    after: { mode: "real", active: true },
   });
 }
 
@@ -108,26 +161,56 @@ export async function deactivateLink(link: LinkRow) {
     mode: "waiting",
     updated_at: new Date().toISOString(),
   } as Partial<LinkRow>);
-  await logAudit(link, "manual_waiting", {
-    at: new Date().toISOString(),
-    from_mode: link.mode,
+  await logAudit({
+    action: "manual_waiting",
+    entity: "link",
+    entityId: link.id,
+    linkId: link.id,
+    slug: link.slug,
+    label: link.name?.trim() || link.slug,
+    before: { mode: link.mode },
+    after: { mode: "waiting" },
   });
 }
 
-export async function archiveLink(id: string) {
+/**
+ * Arquivar NUNCA apaga cliques, eventos ou histórico — apenas marca a data.
+ */
+export async function archiveLink(id: string, link?: LinkRow) {
+  const at = new Date().toISOString();
   const { error } = await supabase
     .from("links")
-    .update({ archived_at: new Date().toISOString(), active: false } as never)
+    .update({ archived_at: at, active: false } as never)
     .eq("id", id);
   if (error) throw error;
+  await logAudit({
+    action: "link_archived",
+    entity: "link",
+    entityId: id,
+    linkId: id,
+    slug: link?.slug ?? null,
+    label: link?.name?.trim() || link?.slug || null,
+    before: { archived_at: null, active: true },
+    after: { archived_at: at, active: false },
+  });
 }
 
-export async function restoreLink(id: string) {
+export async function restoreLink(id: string, link?: LinkRow) {
   const { error } = await supabase
     .from("links")
     .update({ archived_at: null } as never)
     .eq("id", id);
   if (error) throw error;
+  await logAudit({
+    action: "link_restored",
+    entity: "link",
+    entityId: id,
+    linkId: id,
+    slug: link?.slug ?? null,
+    label: link?.name?.trim() || link?.slug || null,
+    before: { archived_at: link?.archived_at ?? null },
+    after: { archived_at: null },
+  });
 }
 
 export async function deleteLink(id: string) {

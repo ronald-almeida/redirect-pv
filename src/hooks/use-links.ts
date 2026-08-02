@@ -16,6 +16,7 @@ import {
   setLinkDomain,
   setLinkMode,
   updateLink,
+  updateLinkAudited,
 } from "@/lib/supabase/queries/links";
 
 export function useLinks() {
@@ -37,7 +38,9 @@ export function useLinkMutations() {
       onSuccess: invalidate,
     }),
     update: useMutation({
-      mutationFn: ({ id, patch }: { id: string; patch: Partial<LinkRow> }) => updateLink(id, patch),
+      // `link` opcional: quando enviado, a alteração entra no Histórico com antes/depois.
+      mutationFn: ({ id, patch, link }: { id: string; patch: Partial<LinkRow>; link?: LinkRow }) =>
+        link ? updateLinkAudited(link, patch) : updateLink(id, patch),
       onSuccess: invalidate,
     }),
     setMode: useMutation({
@@ -62,11 +65,13 @@ export function useLinkMutations() {
       onSuccess: invalidate,
     }),
     archive: useMutation({
-      mutationFn: (id: string) => archiveLink(id),
+      mutationFn: (arg: string | LinkRow) =>
+        typeof arg === "string" ? archiveLink(arg) : archiveLink(arg.id, arg),
       onSuccess: invalidate,
     }),
     restore: useMutation({
-      mutationFn: (id: string) => restoreLink(id),
+      mutationFn: (arg: string | LinkRow) =>
+        typeof arg === "string" ? restoreLink(arg) : restoreLink(arg.id, arg),
       onSuccess: invalidate,
     }),
     duplicate: useMutation({

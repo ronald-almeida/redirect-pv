@@ -200,8 +200,13 @@ export type Database = {
         Row: {
           action: string
           actor: string
+          after_value: Json | null
+          before_value: Json | null
           created_at: string
           detail: Json | null
+          entity_id: string | null
+          entity_label: string | null
+          entity_type: string
           id: string
           link_id: string | null
           slug: string | null
@@ -209,8 +214,13 @@ export type Database = {
         Insert: {
           action: string
           actor?: string
+          after_value?: Json | null
+          before_value?: Json | null
           created_at?: string
           detail?: Json | null
+          entity_id?: string | null
+          entity_label?: string | null
+          entity_type?: string
           id?: string
           link_id?: string | null
           slug?: string | null
@@ -218,8 +228,13 @@ export type Database = {
         Update: {
           action?: string
           actor?: string
+          after_value?: Json | null
+          before_value?: Json | null
           created_at?: string
           detail?: Json | null
+          entity_id?: string | null
+          entity_label?: string | null
+          entity_type?: string
           id?: string
           link_id?: string | null
           slug?: string | null

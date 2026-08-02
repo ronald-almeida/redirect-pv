@@ -50,10 +50,10 @@ type NavItem = {
 const NAV: NavItem[] = [
   { to: "/admin", label: "Visão Geral", shortLabel: "Geral", icon: LayoutDashboard },
   { to: "/admin/slugs", label: "Links", shortLabel: "Links", icon: LinkIcon },
-  { to: "/admin/analytics", label: "Analytics", shortLabel: "Analytics", icon: BarChart3 },
-  { to: "/admin/latency", label: "Latência", shortLabel: "Latência", icon: Activity },
   { to: "/admin/domains", label: "Domínios", shortLabel: "Domínios", icon: Globe },
   { to: "/admin/events", label: "Eventos", shortLabel: "Eventos", icon: ScrollText },
+  { to: "/admin/analytics", label: "Analytics", shortLabel: "Analytics", icon: BarChart3 },
+  { to: "/admin/latency", label: "Latência", shortLabel: "Latência", icon: Activity },
   { to: "/admin/settings", label: "Configurações", shortLabel: "Config.", icon: Settings },
 ];
 

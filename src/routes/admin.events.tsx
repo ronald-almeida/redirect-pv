@@ -1,283 +1,343 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMemo, useState } from "react";
+import { Activity, Download, History, RotateCcw } from "lucide-react";
 import { AdminShell, type AdminPeriod } from "@/components/admin/AdminShell";
-import { StatusBadge } from "@/components/admin/StatusBadge";
-import { type DateRange } from "@/lib/date-range";
-import { adminPeriodToRange } from "@/lib/admin-period";
+import { EmptyState } from "@/components/admin/shared/EmptyState";
+import { AccessTable, type AccessView } from "@/components/admin/events/AccessTable";
+import { AuditTable } from "@/components/admin/events/AuditTable";
+import { EventDetailsSheet } from "@/components/admin/events/EventDetailsSheet";
+import { PagerBar } from "@/components/admin/events/PagerBar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  MousePointerClick, Plus, Pencil, Trash2, AlertTriangle, FileSearch, Clock, Activity,
-} from "lucide-react";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { adminPeriodToRange } from "@/lib/admin-period";
 import { cn } from "@/lib/utils";
+import { useAccessEvents } from "@/hooks/use-access-events";
+import { useAudit } from "@/hooks/use-audit";
+import { useLinks } from "@/hooks/use-links";
+import { useDomains } from "@/hooks/use-domains";
+import { RESULT_LABEL, resultOf } from "@/lib/supabase/queries/access-events";
+import { AUDIT_ACTION_LABEL, ENTITY_LABEL } from "@/lib/supabase/queries/audit";
 
 export const Route = createFileRoute("/admin/events")({
-  head: () => ({ meta: [{ title: "Eventos · Big Cloak" }] }),
+  head: () => ({
+    meta: [
+      { title: "Eventos operacionais · Big Cloak" },
+      {
+        name: "description",
+        content:
+          "Acompanhe acessos aos links e o histórico de alterações administrativas do Big Cloak.",
+      },
+    ],
+  }),
   component: EventsPage,
 });
 
+type Tab = "access" | "audit";
 
-
-
-type EventKind =
-  | "link_created" | "link_updated" | "link_deleted"
-  | "redirect" | "redirect_slow" | "redirect_404"
-  | "limit_reached" | "waiting_activated";
-
-interface Event {
-  id: string;
-  ts: string;
-  kind: EventKind;
-  slug: string;
-  linkName?: string | null;
-  mode?: string | null;
-  detail: string;
-  user: string;
-}
-
-interface ClickRow {
-  id: string;
-  link_id: string;
-  mode_at_click: string;
-  cache_status: string | null;
-  redirect_ms: number | null;
-  created_at: string;
-}
-interface LinkRow {
-  id: string;
-  slug: string;
-  name: string | null;
-  mode: string;
-  click_limit: number | null;
-  click_count: number;
-  created_at: string;
-}
-
-const KIND_META: Record<EventKind, { label: string; icon: React.ComponentType<{ className?: string }>; tone: "info" | "success" | "warning" | "danger" }> = {
-  link_created:     { label: "Link criado",       icon: Plus,             tone: "success" },
-  link_updated:     { label: "Link editado",      icon: Pencil,           tone: "info"    },
-  link_deleted:     { label: "Link deletado",     icon: Trash2,           tone: "danger"  },
-  redirect:         { label: "Redirect",          icon: MousePointerClick, tone: "info"   },
-  redirect_slow:    { label: "Redirect lento",    icon: Clock,            tone: "warning" },
-  redirect_404:     { label: "Slug 404",          icon: FileSearch,       tone: "danger"  },
-  limit_reached:    { label: "Limite atingido",   icon: AlertTriangle,    tone: "warning" },
-  waiting_activated:{ label: "Modo espera",       icon: Activity,         tone: "warning" },
-};
-
-const TONE: Record<"info" | "success" | "warning" | "danger", string> = {
-  info: "bg-sky-500/10 text-sky-400 border-sky-500/25",
-  success: "bg-[--success]/10 text-[--success] border-[--success]/25",
-  warning: "bg-warning/10 text-warning border-warning/25",
-  danger: "bg-destructive/10 text-destructive border-destructive/25",
-};
-
-function EventsPage() {
-  const [period, setPeriod] = useState<AdminPeriod>("today");
-  const [customStart, setCustomStart] = useState<string>("");
-  const [customEnd, setCustomEnd] = useState<string>("");
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<EventKind | "all">("all");
-  const [events, setEvents] = useState<Event[]>([]);
-
-  const range = useMemo<DateRange>(() => adminPeriodToRange(period, customStart, customEnd), [period, customStart, customEnd]);
-
-  useEffect(() => { void load(); }, [range.start?.getTime()]);
-
-  async function load() {
-    if (!range.start) return;
-    const endIso = (range.end ?? new Date()).toISOString();
-    const [linksRes, clicksRes] = await Promise.all([
-      supabase.from("links").select("id, slug, name, mode, click_limit, click_count, created_at"),
-      supabase.from("clicks")
-        .select("id, link_id, mode_at_click, cache_status, redirect_ms, created_at")
-        .gte("created_at", range.start.toISOString())
-        .lt("created_at", endIso)
-        .order("created_at", { ascending: false })
-        .limit(2000),
-    ]);
-    const links = (linksRes.data ?? []) as LinkRow[];
-    const linkMap = new Map(links.map((l) => [l.id, l]));
-    const clicks = (clicksRes.data ?? []) as ClickRow[];
-
-    const ev: Event[] = [];
-
-    // Link created (within range)
-    for (const l of links) {
-      const t = new Date(l.created_at).getTime();
-      if (t >= range.start.getTime() && t < (range.end ?? new Date()).getTime()) {
-        ev.push({
-          id: `lc-${l.id}`, ts: l.created_at, kind: "link_created",
-          slug: l.slug, linkName: l.name, mode: l.mode, detail: `Slug /${l.slug} criado em modo ${l.mode}`, user: "system",
-        });
-      }
-      if (l.click_limit && l.click_count >= l.click_limit) {
-        ev.push({
-          id: `lim-${l.id}`, ts: l.created_at, kind: "limit_reached",
-          slug: l.slug, linkName: l.name, mode: l.mode, detail: `Limite de ${l.click_limit} cliques atingido`, user: "system",
-        });
-      }
-    }
-
-    // Clicks → redirect events
-    for (const c of clicks) {
-      const link = linkMap.get(c.link_id);
-      const slug = link?.slug ?? c.link_id.slice(0, 6);
-      const linkName = link?.name ?? null;
-      const ms = c.redirect_ms ?? 0;
-      const baseMode = c.mode_at_click.split(":")[0];
-
-      if (ms > 500) {
-        ev.push({
-          id: `rs-${c.id}`, ts: c.created_at, kind: "redirect_slow",
-          slug, linkName, mode: baseMode, user: "anônimo",
-          detail: `Redirect levou ${ms}ms · cache ${c.cache_status ?? "—"}`,
-        });
-      } else {
-        ev.push({
-          id: `r-${c.id}`, ts: c.created_at, kind: "redirect",
-          slug, linkName, mode: baseMode, user: "anônimo",
-          detail: `${ms}ms · cache ${c.cache_status ?? "—"} · mode ${baseMode}`,
-        });
-      }
-      if (baseMode === "waiting") {
-        ev.push({
-          id: `wa-${c.id}`, ts: c.created_at, kind: "waiting_activated",
-          slug, linkName, mode: baseMode, user: "system",
-          detail: `Modo espera ativo: link sem destino real configurado`,
-        });
-      }
-    }
-
-    ev.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-    setEvents(ev.slice(0, 1000));
-  }
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return events.filter((e) => {
-      if (filter !== "all" && e.kind !== filter) return false;
-      if (q && !e.slug.toLowerCase().includes(q) && !e.detail.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [events, filter, search]);
-
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: events.length };
-    for (const e of events) c[e.kind] = (c[e.kind] ?? 0) + 1;
-    return c;
-  }, [events]);
-
-  return (
-    <AdminShell period={period} onPeriod={setPeriod} customStart={customStart} customEnd={customEnd} onCustomRange={(s, e) => { setCustomStart(s); setCustomEnd(e); }} search={search} onSearch={setSearch}>
-      <div className="px-4 md:px-6 py-6 space-y-5">
-        {/* Filter chips */}
-        <div className="flex flex-wrap gap-1.5">
-          <FilterChip active={filter === "all"} onClick={() => setFilter("all")} count={counts.all ?? 0} label="Todos" />
-          {(Object.keys(KIND_META) as EventKind[]).map((k) => (
-            <FilterChip
-              key={k}
-              active={filter === k}
-              onClick={() => setFilter(k)}
-              count={counts[k] ?? 0}
-              label={KIND_META[k].label}
-              tone={KIND_META[k].tone}
-            />
-          ))}
-        </div>
-
-        {/* Table */}
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="border-b border-border px-4 py-3">
-            <h2 className="text-[13px] font-semibold tracking-tight">Auditoria</h2>
-            <p className="text-[11px] text-muted-foreground">{filtered.length} eventos · gerado a partir de <code className="text-foreground/80">links</code> e <code className="text-foreground/80">clicks</code></p>
-          </div>
-          {filtered.length === 0 ? (
-            <div className="px-6 py-16 text-center">
-              <FileSearch className="h-5 w-5 mx-auto text-muted-foreground" />
-              <p className="mt-2 text-xs text-muted-foreground">Nenhum evento no período selecionado.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px]">
-                <thead>
-                  <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    <th className="px-4 py-2.5 w-44">Data/Hora</th>
-                    <th className="px-3 py-2.5 w-44">Evento</th>
-                    <th className="px-3 py-2.5">Link</th>
-                    <th className="px-3 py-2.5 w-24">Tipo</th>
-                    <th className="px-3 py-2.5">Detalhes</th>
-                    <th className="px-3 py-2.5 w-24">Usuário</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((e) => {
-                    const meta = KIND_META[e.kind];
-                    return (
-                      <tr key={e.id} className="group border-b border-border last:border-0 hover:bg-secondary/40 transition-colors">
-                        <td className="px-4 py-2.5 font-mono text-[11.5px] text-muted-foreground tabular-nums">
-                          {new Date(e.ts).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[10.5px] font-medium", TONE[meta.tone])}>
-                            <meta.icon className="h-3 w-3" />
-                            {meta.label}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {e.linkName ? (
-                            <div className="flex flex-col leading-tight">
-                              <span className="text-[13px] font-bold text-primary">{e.linkName}</span>
-                              <span className="font-mono text-[10.5px] text-muted-foreground">/{e.slug}</span>
-                            </div>
-                          ) : (
-                            <span className="font-mono text-[12px]">/{e.slug}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {e.mode && (
-                            <StatusBadge
-                              kind={e.mode === "real" ? "real" : e.mode === "decoy" ? "decoy" : "waiting"}
-                              label={e.mode === "real" ? "Real" : e.mode === "decoy" ? "Isca" : "Espera"}
-                            />
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[420px]">{e.detail}</td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{e.user}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </AdminShell>
-  );
-}
-
-function FilterChip({
-  active, onClick, count, label, tone,
+function TabButton({
+  active,
+  icon: Icon,
+  label,
+  onClick,
 }: {
-  active?: boolean; onClick?: () => void; count?: number; label: string; tone?: "info" | "success" | "warning" | "danger";
+  active: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+        "flex h-10 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-[13px] font-semibold transition-colors sm:flex-none",
         active
-          ? "border-foreground/30 bg-secondary text-foreground"
-          : "border-border bg-card text-muted-foreground hover:text-foreground",
+          ? "bg-primary/12 text-primary ring-1 ring-primary/30"
+          : "text-muted-foreground hover:text-foreground",
       )}
     >
-      {tone && <span className={cn("h-1.5 w-1.5 rounded-full",
-        tone === "info" && "bg-sky-400",
-        tone === "success" && "bg-[--success]",
-        tone === "warning" && "bg-warning",
-        tone === "danger" && "bg-destructive",
-      )} />}
+      <Icon className="h-4 w-4" />
       {label}
-      <span className="tabular-nums text-muted-foreground/80">{count ?? 0}</span>
     </button>
+  );
+}
+
+function csv(rows: string[][]) {
+  return rows
+    .map((r) => r.map((c) => `"${(c ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+}
+
+function download(name: string, content: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function EventsPage() {
+  const [tab, setTab] = useState<Tab>("access");
+  const [period, setPeriod] = useState<AdminPeriod>("today");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const range = useMemo(
+    () => adminPeriodToRange(period, customStart, customEnd),
+    [period, customStart, customEnd],
+  );
+
+  const { data: links = [] } = useLinks();
+  const { domains } = useDomains();
+  const access = useAccessEvents(range, links, domains);
+  const audit = useAudit(range);
+  const [selected, setSelected] = useState<AccessView | null>(null);
+
+  const linkById = useMemo(() => new Map(links.map((l) => [l.id, l])), [links]);
+  const domainById = useMemo(() => new Map(domains.map((d) => [d.id, d.domain])), [domains]);
+
+  const views = useMemo<AccessView[]>(
+    () =>
+      access.rows.map((r) => {
+        const l = linkById.get(r.link_id);
+        return {
+          ...r,
+          slug: l?.slug ?? "desconhecida",
+          linkName: l?.name?.trim() || l?.slug || "Link removido",
+          domain: (l?.domain_id ? domainById.get(l.domain_id) : null) ?? r.host ?? "",
+          destination: l?.real_url ?? "",
+        };
+      }),
+    [access.rows, linkById, domainById],
+  );
+
+  const exportAccess = () =>
+    download(
+      `acessos-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv([
+        ["Data", "Link", "Slug", "Domínio", "Destino", "Resultado", "Tempo (ms)", "Dispositivo", "País"],
+        ...views.map((v) => [
+          new Date(v.created_at).toLocaleString("pt-BR"),
+          v.linkName,
+          v.slug,
+          v.domain,
+          v.destination,
+          RESULT_LABEL[resultOf(v.mode_at_click)],
+          String(v.redirect_ms ?? ""),
+          v.device ?? "",
+          v.country ?? "",
+        ]),
+      ]),
+    );
+
+  const f = access.filters;
+
+  return (
+    <AdminShell
+      period={period}
+      onPeriod={setPeriod}
+      customStart={customStart}
+      customEnd={customEnd}
+      onCustomRange={(s, e) => {
+        setCustomStart(s);
+        setCustomEnd(e);
+      }}
+    >
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-[19px] font-bold tracking-tight">Eventos</h1>
+          <p className="text-[12.5px] text-muted-foreground">
+            Acessos aos links e histórico de alterações do painel.
+          </p>
+        </div>
+
+        <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
+          <TabButton
+            active={tab === "access"}
+            icon={Activity}
+            label="Acessos"
+            onClick={() => setTab("access")}
+          />
+          <TabButton
+            active={tab === "audit"}
+            icon={History}
+            label="Histórico de Alterações"
+            onClick={() => setTab("audit")}
+          />
+        </div>
+
+        {tab === "access" ? (
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex flex-col gap-2 border-b border-border p-3 lg:flex-row lg:items-center">
+              <Input
+                value={f.search}
+                onChange={(e) => access.patch({ search: e.target.value })}
+                placeholder="Buscar por slug, nome, domínio ou destino"
+                className="h-10 flex-1 text-[16px] lg:text-[13px]"
+              />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:flex">
+                <Select
+                  value={f.result}
+                  onValueChange={(v) => access.patch({ result: v as typeof f.result })}
+                >
+                  <SelectTrigger className="h-10 lg:w-[170px]">
+                    <SelectValue placeholder="Resultado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os resultados</SelectItem>
+                    <SelectItem value="redirected">Redirecionado</SelectItem>
+                    <SelectItem value="waiting">Página de espera</SelectItem>
+                    <SelectItem value="blocked">Bloqueado</SelectItem>
+                    <SelectItem value="error">Erro</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={f.domainId} onValueChange={(v) => access.patch({ domainId: v })}>
+                  <SelectTrigger className="h-10 lg:w-[170px]">
+                    <SelectValue placeholder="Domínio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os domínios</SelectItem>
+                    {domains.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.domain}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={f.device} onValueChange={(v) => access.patch({ device: v })}>
+                  <SelectTrigger className="h-10 lg:w-[150px]">
+                    <SelectValue placeholder="Dispositivo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos dispositivos</SelectItem>
+                    {access.devices.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={f.country} onValueChange={(v) => access.patch({ country: v })}>
+                  <SelectTrigger className="h-10 lg:w-[130px]">
+                    <SelectValue placeholder="País" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os países</SelectItem>
+                    {access.countries.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="h-10 flex-1" onClick={access.reset}>
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  Limpar
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-10 flex-1"
+                  onClick={exportAccess}
+                  disabled={views.length === 0}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  CSV
+                </Button>
+              </div>
+            </div>
+
+            {views.length === 0 && !access.isLoading ? (
+              <EmptyState
+                icon={Activity}
+                title="Nenhum acesso no período"
+                description="Ajuste os filtros ou selecione um período maior para ver os eventos."
+              />
+            ) : (
+              <AccessTable rows={views} onSelect={setSelected} />
+            )}
+
+            <PagerBar
+              page={f.page}
+              pageSize={f.pageSize}
+              total={access.total}
+              loading={access.isLoading}
+              noun="acessos"
+              onPage={(p) => access.patch({ page: p })}
+            />
+          </section>
+        ) : (
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row sm:items-center">
+              <Select
+                value={audit.filters.entity}
+                onValueChange={(v) => audit.patch({ entity: v as never })}
+              >
+                <SelectTrigger className="h-10 sm:w-[190px]">
+                  <SelectValue placeholder="Entidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as entidades</SelectItem>
+                  {(Object.keys(ENTITY_LABEL) as (keyof typeof ENTITY_LABEL)[]).map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {ENTITY_LABEL[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={audit.filters.action}
+                onValueChange={(v) => audit.patch({ action: v })}
+              >
+                <SelectTrigger className="h-10 sm:w-[220px]">
+                  <SelectValue placeholder="Ação" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as ações</SelectItem>
+                  {Object.entries(AUDIT_ACTION_LABEL).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="h-10" onClick={audit.reset}>
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                Limpar
+              </Button>
+            </div>
+
+            {audit.rows.length === 0 && !audit.isLoading ? (
+              <EmptyState
+                icon={History}
+                title="Nenhuma alteração registrada"
+                description="Criações, edições, ativações e arquivamentos aparecem aqui automaticamente."
+              />
+            ) : (
+              <AuditTable rows={audit.rows} />
+            )}
+
+            <PagerBar
+              page={audit.filters.page}
+              pageSize={audit.filters.pageSize}
+              total={audit.total}
+              loading={audit.isLoading}
+              noun="alterações"
+              onPage={(p) => audit.patch({ page: p })}
+            />
+          </section>
+        )}
+      </div>
+
+      <EventDetailsSheet event={selected} onClose={() => setSelected(null)} />
+    </AdminShell>
   );
 }
