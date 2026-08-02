@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
-    meta: [{ title: "CloakPanel · Painel" }],
+    meta: [{ title: "Big Cloak · Painel" }],
   }),
   component: AdminLayout,
 });

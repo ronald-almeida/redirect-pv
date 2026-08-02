@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/events")({
-  head: () => ({ meta: [{ title: "Eventos · CloakPanel" }] }),
+  head: () => ({ meta: [{ title: "Eventos · Big Cloak" }] }),
   component: EventsPage,
 });
 

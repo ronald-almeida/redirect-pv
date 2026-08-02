@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/settings")({
-  head: () => ({ meta: [{ title: "Configurações · CloakPanel" }] }),
+  head: () => ({ meta: [{ title: "Configurações · Big Cloak" }] }),
   component: SettingsPage,
 });
 
@@ -75,7 +75,7 @@ function SettingsPage() {
           {/* GERAL */}
           <TabsContent value="general" className="space-y-3">
             <Section title="Identidade" desc="Informações exibidas no painel.">
-              <Row label="Nome do painel" value="CloakPanel" />
+              <Row label="Nome do painel" value="Big Cloak" />
               <Row label="Ambiente" value={typeof window !== "undefined" && !/preview|localhost/.test(window.location.host) ? "Production" : "Preview"} />
               <Row label="Host" value={typeof window !== "undefined" ? window.location.host : "—"} />
               <Row label="Fuso horário" value={tz} />

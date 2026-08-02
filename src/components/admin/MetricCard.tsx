@@ -13,7 +13,7 @@ interface MetricCardProps {
 }
 
 const ACCENT: Record<NonNullable<MetricCardProps["accent"]>, { line: string; bg: string; text: string; glow: string }> = {
-  lime:   { line: "#A3E635", bg: "rgba(163,230,53,0.12)", text: "text-primary",          glow: "shadow-[0_0_40px_-12px_rgba(163,230,53,0.55)]" },
+  lime:   { line: "#34D399", bg: "rgba(52,211,153,0.12)", text: "text-primary",          glow: "shadow-[0_0_40px_-12px_rgba(52,211,153,0.55)]" },
   violet: { line: "#A78BFA", bg: "rgba(167,139,250,0.14)", text: "text-[#A78BFA]",        glow: "shadow-[0_0_40px_-12px_rgba(167,139,250,0.55)]" },
   cyan:   { line: "#22D3EE", bg: "rgba(34,211,238,0.14)",  text: "text-[#22D3EE]",        glow: "shadow-[0_0_40px_-12px_rgba(34,211,238,0.55)]" },
   orange: { line: "#F59E0B", bg: "rgba(245,158,11,0.14)",  text: "text-[#F59E0B]",        glow: "shadow-[0_0_40px_-12px_rgba(245,158,11,0.55)]" },
@@ -26,7 +26,7 @@ export function MetricCard({ label, value, delta, icon: Icon, series, accent = "
   const data = (series ?? []).map((v, i) => ({ i, v }));
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-[0_0_0_1px_rgba(163,230,53,0.08),0_20px_40px_-20px_rgba(0,0,0,0.6)]">
+    <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-[0_0_0_1px_rgba(52,211,153,0.08),0_20px_40px_-20px_rgba(0,0,0,0.6)]">
       {/* subtle radial glow in background */}
       <div
         aria-hidden
