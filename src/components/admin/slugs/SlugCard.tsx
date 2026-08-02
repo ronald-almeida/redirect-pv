@@ -101,6 +101,16 @@ export function SlugCard(props: SlugCardProps) {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
+            {!link.archived_at &&
+              (link.mode === "waiting" ? (
+                <DropdownMenuItem onClick={() => props.onActivate(link)}>
+                  <Play className="mr-2 h-3.5 w-3.5" /> Ativar link
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => props.onDeactivate(link)}>
+                  <PauseCircle className="mr-2 h-3.5 w-3.5" /> Colocar em espera
+                </DropdownMenuItem>
+              ))}
             <DropdownMenuItem onClick={() => props.onDuplicate(link)}>Duplicar</DropdownMenuItem>
             <DropdownMenuSeparator />
             {link.archived_at ? (
