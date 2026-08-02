@@ -5,15 +5,17 @@ import { toast } from "sonner";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DomainCard, type DomainStats } from "@/components/admin/domains/DomainCard";
+import { DomainCard } from "@/components/admin/domains/DomainCard";
 import {
   DomainFormDialog,
   type DomainFormValues,
 } from "@/components/admin/domains/DomainFormDialog";
 import { DomainSlugsDrawer } from "@/components/admin/domains/DomainSlugsDrawer";
 import { useDomainMutations, useDomains } from "@/hooks/use-domains";
+import { useDomainUsage } from "@/hooks/use-domain-usage";
 import { useLinks } from "@/hooks/use-links";
-import type { DomainRow, LinkRow } from "@/lib/bigcloak";
+import type { DomainRow } from "@/lib/bigcloak";
+import { EMPTY_USAGE } from "@/lib/domain-usage";
 import { nf } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
