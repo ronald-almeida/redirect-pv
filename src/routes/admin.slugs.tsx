@@ -263,6 +263,8 @@ function SlugsPage() {
                           onRestore={handleRestore}
                           onDuplicate={handleDuplicate}
                           onPickDomain={handlePickDomain}
+                          onActivate={handleActivate}
+                          onDeactivate={handleDeactivate}
                         />
                       );
                     })}
