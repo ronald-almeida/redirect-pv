@@ -1,248 +1,274 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMemo, useState } from "react";
+import { Globe, Plus, Search } from "lucide-react";
+import { toast } from "sonner";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { DomainCard, type DomainStats } from "@/components/admin/domains/DomainCard";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Globe, Plus, Star, Trash2 } from "lucide-react";
+  DomainFormDialog,
+  type DomainFormValues,
+} from "@/components/admin/domains/DomainFormDialog";
+import { DomainSlugsDrawer } from "@/components/admin/domains/DomainSlugsDrawer";
+import { useDomainMutations, useDomains } from "@/hooks/use-domains";
+import { useLinks } from "@/hooks/use-links";
+import type { DomainRow, LinkRow } from "@/lib/bigcloak";
+import { nf } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/domains")({
-  head: () => ({ meta: [{ title: "Domínios · Big Cloak" }] }),
+  head: () => ({
+    meta: [
+      { title: "Domínios · Big Cloak" },
+      {
+        name: "description",
+        content:
+          "Centro de gerenciamento de domínios do Big Cloak: saúde, slugs vinculadas e domínio principal.",
+      },
+      { property: "og:title", content: "Domínios · Big Cloak" },
+      {
+        property: "og:description",
+        content: "Gerencie domínios, saúde de DNS/Worker e slugs vinculadas.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: DomainsPage,
 });
 
-export interface DomainRow {
-  id: string;
-  domain: string;
-  active: boolean;
-  is_primary: boolean;
-  created_at: string;
-}
+type Filter = "all" | "primary" | "secondary" | "archived";
 
-const DOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "Todos" },
+  { key: "primary", label: "Principal" },
+  { key: "secondary", label: "Secundários" },
+  { key: "archived", label: "Arquivados" },
+];
 
-function normalizeDomain(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/.*$/, "")
-    .replace(/\s/g, "");
+const DAY = 24 * 60 * 60 * 1000;
+
+function buildStats(links: LinkRow[]): DomainStats {
+  const now = Date.now();
+  let clicks = 0;
+  let recentClicks = 0;
+  let lastClickAt: string | null = null;
+  let msSum = 0;
+  let msCount = 0;
+
+  for (const l of links) {
+    clicks += l.click_count ?? 0;
+    if (l.last_click_at) {
+      if (!lastClickAt || l.last_click_at > lastClickAt) lastClickAt = l.last_click_at;
+      if (now - new Date(l.last_click_at).getTime() < DAY) recentClicks += l.click_count ?? 0;
+    }
+    const ms = (l as { avg_redirect_ms?: number | null }).avg_redirect_ms ?? 0;
+    if (ms > 0) {
+      msSum += ms;
+      msCount += 1;
+    }
+  }
+
+  return {
+    totalSlugs: links.length,
+    activeSlugs: links.filter((l) => !l.archived_at && l.active && l.mode !== "waiting").length,
+    waitingSlugs: links.filter((l) => !l.archived_at && l.mode === "waiting").length,
+    clicks,
+    recentClicks,
+    lastClickAt,
+    avgRedirectMs: msCount ? Math.round(msSum / msCount) : 0,
+  };
 }
 
 function DomainsPage() {
-  const [domains, setDomains] = useState<DomainRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [newDomain, setNewDomain] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const { domains, isLoading } = useDomains();
+  const { data: links = [] } = useLinks();
+  const m = useDomainMutations();
 
-  const load = async () => {
-    const { data } = await supabase
-      .from("domains")
-      .select("*")
-      .order("is_primary", { ascending: false })
-      .order("domain", { ascending: true });
-    setDomains((data ?? []) as DomainRow[]);
-    setLoading(false);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<DomainRow | null>(null);
+  const [drawerDomain, setDrawerDomain] = useState<DomainRow | null>(null);
+
+  const statsByDomain = useMemo(() => {
+    const map = new Map<string, DomainStats>();
+    for (const d of domains) {
+      map.set(
+        d.id,
+        buildStats(links.filter((l) => l.domain_id === d.id)),
+      );
+    }
+    return map;
+  }, [domains, links]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return domains.filter((d) => {
+      if (filter === "archived" && !d.archived_at) return false;
+      if (filter !== "archived" && d.archived_at) return false;
+      if (filter === "primary" && !d.is_primary) return false;
+      if (filter === "secondary" && d.is_primary) return false;
+      if (q && !`${d.domain} ${d.description ?? ""}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [domains, filter, query]);
+
+  const totals = useMemo(() => {
+    const actives = domains.filter((d) => !d.archived_at);
+    const slugs = links.filter((l) => !l.archived_at).length;
+    return { actives: actives.length, archived: domains.length - actives.length, slugs };
+  }, [domains, links]);
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+  const openEdit = (d: DomainRow) => {
+    setEditing(d);
+    setFormOpen(true);
   };
 
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const handleAdd = async (e: FormEvent) => {
-    e.preventDefault();
-    const d = normalizeDomain(newDomain);
-    if (!DOMAIN_RE.test(d)) {
-      setError("Domínio inválido. Ex.: epo815.shop");
-      return;
+  const handleSubmit = async (v: DomainFormValues) => {
+    if (editing) {
+      await m.update.mutateAsync({
+        id: editing.id,
+        patch: { domain: v.domain, description: v.description, active: v.active || v.makePrimary },
+      });
+      if (v.makePrimary && !editing.is_primary) await m.setPrimary.mutateAsync(editing.id);
+      toast.success("Domínio atualizado");
+    } else {
+      await m.create.mutateAsync({
+        input: { domain: v.domain, description: v.description, makePrimary: v.makePrimary },
+        existing: domains,
+      });
+      toast.success("Domínio adicionado");
     }
-    if (domains.some((x) => x.domain === d)) {
-      setError("Este domínio já está cadastrado.");
-      return;
-    }
-    setSaving(true);
-    const { error: err } = await supabase
-      .from("domains")
-      .insert({ domain: d, is_primary: domains.length === 0 });
-    setSaving(false);
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    setNewDomain("");
-    setError(null);
-    setOpen(false);
-    void load();
   };
 
-  const setPrimary = async (row: DomainRow) => {
-    setDomains((prev) => prev.map((x) => ({ ...x, is_primary: x.id === row.id })));
-    await supabase.from("domains").update({ is_primary: false }).neq("id", row.id);
-    await supabase.from("domains").update({ is_primary: true, active: true }).eq("id", row.id);
-    void load();
+  const setPrimary = async (d: DomainRow) => {
+    await m.setPrimary.mutateAsync(d.id);
+    toast.success(`${d.domain} agora é o domínio principal`);
   };
 
-  const setActive = async (row: DomainRow, active: boolean) => {
-    if (!active && row.is_primary) {
-      alert("O domínio principal não pode ser desativado. Defina outro como principal antes.");
+  const archive = async (d: DomainRow) => {
+    if (d.is_primary) {
+      toast.error("Defina outro domínio como principal antes de arquivar este.");
       return;
     }
-    setDomains((prev) => prev.map((x) => (x.id === row.id ? { ...x, active } : x)));
-    await supabase.from("domains").update({ active }).eq("id", row.id);
+    await m.archive.mutateAsync(d.id);
+    toast.success(`${d.domain} arquivado. As slugs continuam intactas.`);
   };
 
-  const remove = async (row: DomainRow) => {
-    if (domains.length <= 1) {
-      alert("Não é possível remover o único domínio cadastrado.");
-      return;
-    }
-    if (!confirm(`Remover o domínio ${row.domain}?`)) return;
-    await supabase.from("domains").delete().eq("id", row.id);
-    if (row.is_primary) {
-      const next = domains.find((x) => x.id !== row.id);
-      if (next) await supabase.from("domains").update({ is_primary: true }).eq("id", next.id);
-    }
-    void load();
+  const restore = async (d: DomainRow) => {
+    await m.restore.mutateAsync(d.id);
+    toast.success(`${d.domain} restaurado`);
   };
 
   return (
-    <AdminShell
-      rightSlot={
-        <Button onClick={() => setOpen(true)} className="gap-1.5">
-          <Plus className="h-4 w-4" /> Adicionar domínio
-        </Button>
-      }
-    >
-      <div className="mb-6">
-        <h1 className="text-[22px] font-bold tracking-tight">Domínios</h1>
-        <p className="text-[13px] text-muted-foreground">
-          Gerencie os domínios usados para gerar os links. Todos apontam para o mesmo redirecionador.
-        </p>
-      </div>
+    <AdminShell>
+      <div className="space-y-5">
+        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:flex sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-black tracking-tight sm:text-2xl">Domínios</h1>
+            <p className="mt-1 text-[12.5px] text-muted-foreground">
+              {nf(totals.actives)} ativos · {nf(totals.archived)} arquivados · {nf(totals.slugs)}{" "}
+              slugs
+            </p>
+          </div>
+          <Button onClick={openCreate} className="h-11 shrink-0 gap-1.5">
+            <Plus className="h-4 w-4" /> Novo domínio
+          </Button>
+        </header>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-border bg-secondary/40 text-[10.5px] uppercase tracking-wider text-muted-foreground">
-              <th className="px-4 py-3 text-left font-semibold">Domínio</th>
-              <th className="px-3 py-3 text-left font-semibold">Status</th>
-              <th className="px-3 py-3 text-left font-semibold">Ativo</th>
-              <th className="px-3 py-3 text-right font-semibold">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                  Carregando…
-                </td>
-              </tr>
-            )}
-            {!loading && domains.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                  Nenhum domínio cadastrado.
-                </td>
-              </tr>
-            )}
-            {domains.map((d, i) => (
-              <tr
-                key={d.id}
-                className={cn("border-b border-border/60 last:border-0", i % 2 === 1 && "bg-secondary/20")}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar domínio…"
+              className="h-11 pl-9 text-base"
+              inputMode="search"
+            />
+          </div>
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={cn(
+                  "h-11 shrink-0 rounded-lg border px-3.5 text-[13px] font-semibold transition-colors",
+                  filter === f.key
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:bg-secondary",
+                )}
               >
-                <td className="px-4 py-4">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/12 text-primary">
-                      <Globe className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <div className="text-[14px] font-bold text-primary">{d.domain}</div>
-                      <div className="font-mono text-[11px] text-muted-foreground">https://{d.domain}/slug</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-3 py-4">
-                  {d.is_primary ? (
-                    <span className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider text-primary">
-                      <Star className="h-3 w-3" /> Principal
-                    </span>
-                  ) : (
-                    <span className="text-[11.5px] text-muted-foreground">Secundário</span>
-                  )}
-                </td>
-                <td className="px-3 py-4">
-                  <Switch checked={d.active} onCheckedChange={(v) => setActive(d, v)} />
-                </td>
-                <td className="px-3 py-4">
-                  <div className="flex items-center justify-end gap-2">
-                    {!d.is_primary && (
-                      <button
-                        onClick={() => setPrimary(d)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11.5px] font-semibold text-primary transition-all hover:bg-primary/20"
-                      >
-                        <Star className="h-3.5 w-3.5" /> Definir como principal
-                      </button>
-                    )}
-                    <button
-                      onClick={() => remove(d)}
-                      disabled={domains.length <= 1}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 px-2.5 py-1 text-[11.5px] font-semibold text-destructive transition-all hover:bg-destructive/10 disabled:opacity-40"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" /> Remover
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                {f.label}
+              </button>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {[0, 1].map((i) => (
+              <div key={i} className="h-56 animate-pulse rounded-2xl border border-border bg-card" />
+            ))}
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border py-16 text-center">
+            <Globe className="mx-auto h-8 w-8 text-muted-foreground" />
+            <p className="mt-3 text-[14px] font-semibold">Nenhum domínio encontrado</p>
+            <p className="mt-1 text-[12.5px] text-muted-foreground">
+              Adicione um domínio para começar a distribuir suas slugs.
+            </p>
+            <Button onClick={openCreate} className="mt-4 h-11 gap-1.5">
+              <Plus className="h-4 w-4" /> Novo domínio
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {visible.map((d) => (
+              <DomainCard
+                key={d.id}
+                domain={d}
+                stats={
+                  statsByDomain.get(d.id) ?? {
+                    totalSlugs: 0,
+                    activeSlugs: 0,
+                    waitingSlugs: 0,
+                    clicks: 0,
+                    recentClicks: 0,
+                    lastClickAt: null,
+                    avgRedirectMs: 0,
+                  }
+                }
+                onViewSlugs={setDrawerDomain}
+                onSetPrimary={setPrimary}
+                onEdit={openEdit}
+                onArchive={archive}
+                onRestore={restore}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adicionar domínio</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleAdd} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="domain">Domínio</Label>
-              <Input
-                id="domain"
-                value={newDomain}
-                onChange={(e) => {
-                  setNewDomain(e.target.value);
-                  setError(null);
-                }}
-                placeholder="epo815.shop"
-                autoFocus
-              />
-              <p className="text-[11.5px] text-muted-foreground">Sem https:// e sem barra final.</p>
-              {error && <p className="text-[11.5px] text-destructive">{error}</p>}
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Salvando…" : "Adicionar"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <DomainFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        domain={editing}
+        existingDomains={domains}
+        onSubmit={handleSubmit}
+      />
+
+      <DomainSlugsDrawer
+        domain={drawerDomain}
+        links={links.filter((l) => l.domain_id === drawerDomain?.id)}
+        onOpenChange={(open) => !open && setDrawerDomain(null)}
+      />
     </AdminShell>
   );
 }
