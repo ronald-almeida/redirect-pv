@@ -5,15 +5,17 @@ import { toast } from "sonner";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DomainCard, type DomainStats } from "@/components/admin/domains/DomainCard";
+import { DomainCard } from "@/components/admin/domains/DomainCard";
 import {
   DomainFormDialog,
   type DomainFormValues,
 } from "@/components/admin/domains/DomainFormDialog";
 import { DomainSlugsDrawer } from "@/components/admin/domains/DomainSlugsDrawer";
 import { useDomainMutations, useDomains } from "@/hooks/use-domains";
+import { useDomainUsage } from "@/hooks/use-domain-usage";
 import { useLinks } from "@/hooks/use-links";
-import type { DomainRow, LinkRow } from "@/lib/bigcloak";
+import type { DomainRow } from "@/lib/bigcloak";
+import { EMPTY_USAGE } from "@/lib/domain-usage";
 import { nf } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -47,43 +49,10 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "archived", label: "Arquivados" },
 ];
 
-const DAY = 24 * 60 * 60 * 1000;
-
-function buildStats(links: LinkRow[]): DomainStats {
-  const now = Date.now();
-  let clicks = 0;
-  let recentClicks = 0;
-  let lastClickAt: string | null = null;
-  let msSum = 0;
-  let msCount = 0;
-
-  for (const l of links) {
-    clicks += l.click_count ?? 0;
-    if (l.last_click_at) {
-      if (!lastClickAt || l.last_click_at > lastClickAt) lastClickAt = l.last_click_at;
-      if (now - new Date(l.last_click_at).getTime() < DAY) recentClicks += l.click_count ?? 0;
-    }
-    const ms = (l as { avg_redirect_ms?: number | null }).avg_redirect_ms ?? 0;
-    if (ms > 0) {
-      msSum += ms;
-      msCount += 1;
-    }
-  }
-
-  return {
-    totalSlugs: links.length,
-    activeSlugs: links.filter((l) => !l.archived_at && l.active && l.mode !== "waiting").length,
-    waitingSlugs: links.filter((l) => !l.archived_at && l.mode === "waiting").length,
-    clicks,
-    recentClicks,
-    lastClickAt,
-    avgRedirectMs: msCount ? Math.round(msSum / msCount) : 0,
-  };
-}
-
 function DomainsPage() {
   const { domains, isLoading } = useDomains();
   const { data: links = [] } = useLinks();
+  const { getUsage } = useDomainUsage(domains, links);
   const m = useDomainMutations();
 
   const [query, setQuery] = useState("");
@@ -92,16 +61,6 @@ function DomainsPage() {
   const [editing, setEditing] = useState<DomainRow | null>(null);
   const [drawerDomain, setDrawerDomain] = useState<DomainRow | null>(null);
 
-  const statsByDomain = useMemo(() => {
-    const map = new Map<string, DomainStats>();
-    for (const d of domains) {
-      map.set(
-        d.id,
-        buildStats(links.filter((l) => l.domain_id === d.id)),
-      );
-    }
-    return map;
-  }, [domains, links]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -234,17 +193,7 @@ function DomainsPage() {
               <DomainCard
                 key={d.id}
                 domain={d}
-                stats={
-                  statsByDomain.get(d.id) ?? {
-                    totalSlugs: 0,
-                    activeSlugs: 0,
-                    waitingSlugs: 0,
-                    clicks: 0,
-                    recentClicks: 0,
-                    lastClickAt: null,
-                    avgRedirectMs: 0,
-                  }
-                }
+                usage={getUsage(d.id)}
                 onViewSlugs={setDrawerDomain}
                 onSetPrimary={setPrimary}
                 onEdit={openEdit}
@@ -267,8 +216,10 @@ function DomainsPage() {
       <DomainSlugsDrawer
         domain={drawerDomain}
         links={links.filter((l) => l.domain_id === drawerDomain?.id)}
+        usage={drawerDomain ? getUsage(drawerDomain.id) : EMPTY_USAGE}
         onOpenChange={(open) => !open && setDrawerDomain(null)}
       />
+
     </AdminShell>
   );
 }

@@ -1,20 +1,13 @@
 import { Archive, ArchiveRestore, Edit3, ListTree, Star } from "lucide-react";
 import type { DomainRow } from "@/lib/bigcloak";
 import { formatRel, nf } from "@/lib/format";
-import { domainChecks, domainHealth, type DomainSignals } from "@/lib/domain-health";
+import { domainChecks, domainHealth } from "@/lib/domain-health";
+import { USAGE_META, type DomainUsage } from "@/lib/domain-usage";
 import { cn } from "@/lib/utils";
-
-export interface DomainStats extends DomainSignals {
-  totalSlugs: number;
-  activeSlugs: number;
-  waitingSlugs: number;
-  clicks: number;
-  avgRedirectMs: number;
-}
 
 interface DomainCardProps {
   domain: DomainRow;
-  stats: DomainStats;
+  usage: DomainUsage;
   onViewSlugs: (d: DomainRow) => void;
   onSetPrimary: (d: DomainRow) => void;
   onEdit: (d: DomainRow) => void;
@@ -31,18 +24,24 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function shortDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
 export function DomainCard({
   domain: d,
-  stats,
+  usage,
   onViewSlugs,
   onSetPrimary,
   onEdit,
   onArchive,
   onRestore,
 }: DomainCardProps) {
-  const health = domainHealth(d, stats);
-  const checks = domainChecks(d, stats);
+  const health = domainHealth(d, usage);
+  const checks = domainChecks(d, usage);
   const archived = !!d.archived_at;
+  const level = USAGE_META[usage.level];
 
   return (
     <article
@@ -52,38 +51,70 @@ export function DomainCard({
         archived && "opacity-70",
       )}
     >
-      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-[17px] font-bold tracking-tight">{d.domain}</h3>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-0.5 text-[11px] font-semibold">
-              <span className={cn("h-1.5 w-1.5 rounded-full", health.dot)} />
-              {health.label}
-            </span>
-            {d.is_primary ? (
-              <span className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider text-primary">
-                <Star className="h-3 w-3" /> Principal
-              </span>
-            ) : (
-              <span className="rounded-md bg-secondary/60 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {archived ? "Arquivado" : "Secundário"}
-              </span>
+      <header className="min-w-0">
+        <h3 className="truncate text-[17px] font-bold tracking-tight">{d.domain}</h3>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-0.5 text-[11px] font-semibold">
+            <span className={cn("h-1.5 w-1.5 rounded-full", health.dot)} />
+            {health.label}
+          </span>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md bg-secondary/60 px-2 py-0.5 text-[11px] font-semibold",
+              level.text,
             )}
-          </div>
-          {d.description && (
-            <p className="mt-2 line-clamp-2 text-[12px] text-muted-foreground">{d.description}</p>
+            title="Métrica operacional de uso interno — não indica reputação do domínio."
+          >
+            <span className={cn("h-1.5 w-1.5 rounded-full", level.dot)} />
+            {level.label}
+          </span>
+          {d.is_primary ? (
+            <span className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider text-primary">
+              <Star className="h-3 w-3" /> Principal
+            </span>
+          ) : (
+            <span className="rounded-md bg-secondary/60 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {archived ? "Arquivado" : "Secundário"}
+            </span>
           )}
         </div>
+        {d.description && (
+          <p className="mt-2 line-clamp-2 text-[12px] text-muted-foreground">{d.description}</p>
+        )}
       </header>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Metric label="Slugs" value={nf(stats.totalSlugs)} />
-        <Metric label="Cliques" value={nf(stats.clicks)} />
-        <Metric label="Ativas" value={nf(stats.activeSlugs)} />
-        <Metric label="Em espera" value={nf(stats.waitingSlugs)} />
+      <div className="mt-4">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          Índice de utilização
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Metric label="Slugs" value={nf(usage.totalSlugs)} />
+          <Metric label="Ativas" value={nf(usage.activeSlugs)} />
+          <Metric label="Em espera" value={nf(usage.waitingSlugs)} />
+          <Metric label="Arquivadas" value={nf(usage.archivedSlugs)} />
+          <Metric label="Cliques" value={nf(usage.clicks)} />
+          <Metric label="7 dias" value={nf(usage.clicks7d)} />
+          <Metric label="30 dias" value={nf(usage.clicks30d)} />
+          <Metric label="Último acesso" value={formatRel(usage.lastClickAt)} />
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11.5px] text-muted-foreground">
+          <span>
+            1ª utilização <strong className="text-foreground">{shortDate(usage.firstUseAt)}</strong>
+          </span>
+          <span>
+            Última utilização{" "}
+            <strong className="text-foreground">{shortDate(usage.lastUseAt)}</strong>
+          </span>
+          <span>
+            Redirect médio{" "}
+            <strong className="text-foreground">
+              {usage.avgRedirectMs ? `${usage.avgRedirectMs} ms` : "—"}
+            </strong>
+          </span>
+        </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[11.5px] sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-[11.5px] sm:grid-cols-4">
         {checks.map((c) => (
           <div key={c.key} className="min-w-0">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -95,24 +126,6 @@ export function DomainCard({
             </div>
           </div>
         ))}
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11.5px] text-muted-foreground">
-        <span>
-          Último clique <strong className="text-foreground">{formatRel(stats.lastClickAt)}</strong>
-        </span>
-        <span>
-          Redirect médio{" "}
-          <strong className="text-foreground">
-            {stats.avgRedirectMs ? `${stats.avgRedirectMs} ms` : "—"}
-          </strong>
-        </span>
-        <span>
-          Cadastrado em{" "}
-          <strong className="text-foreground">
-            {new Date(d.created_at).toLocaleDateString("pt-BR")}
-          </strong>
-        </span>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
