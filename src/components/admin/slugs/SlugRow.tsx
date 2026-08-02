@@ -86,6 +86,33 @@ export function SlugRow(props: SlugRowProps) {
       <td className="px-4 py-3.5 text-[12px] text-muted-foreground">{formatRel(lastClickAt)}</td>
       <td className="px-4 py-3.5">
         <div className="flex items-center justify-end gap-1">
+          {!link.archived_at &&
+            (link.mode === "waiting" ? (
+              <button
+                onClick={() => props.onActivate(link)}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[11.5px] font-semibold transition",
+                  canActivate(link)
+                    ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                    : "border-border bg-secondary/60 text-muted-foreground hover:text-foreground",
+                )}
+                title={
+                  canActivate(link)
+                    ? "Ativar link"
+                    : "Adicione uma URL de destino antes de ativar este link."
+                }
+              >
+                <Play className="h-3.5 w-3.5" /> Ativar
+              </button>
+            ) : (
+              <button
+                onClick={() => props.onDeactivate(link)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 text-[11.5px] font-semibold text-muted-foreground transition hover:text-foreground"
+                title="Colocar em espera"
+              >
+                <PauseCircle className="h-3.5 w-3.5" /> Espera
+              </button>
+            ))}
           <IconBtn label="Copiar" onClick={() => props.onCopy(link)}>
             {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
           </IconBtn>
@@ -101,25 +128,15 @@ export function SlugRow(props: SlugRowProps) {
                 <MoreHorizontal className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => props.onDuplicate(link)}>
-                Duplicar
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {link.archived_at ? (
-                <DropdownMenuItem onClick={() => props.onRestore(link)}>
-                  <ArchiveRestore className="mr-2 h-3.5 w-3.5" /> Restaurar
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  onClick={() => props.onArchive(link)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Archive className="mr-2 h-3.5 w-3.5" /> Arquivar
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <DropdownMenuContent align="end" className="w-48">
+              {!link.archived_at &&
+                (link.mode === "waiting" ? (
+                  <DropdownMenuItem onClick={() => props.onActivate(link)}>
+                    <Play className="mr-2 h-3.5 w-3.5" /> Ativar link
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => props.onDeactivate(link)}>
+                    <PauseCircle className="mr-2 h-3.5 w-3.5" /> Col
         </div>
       </td>
     </tr>
