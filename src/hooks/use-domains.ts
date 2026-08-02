@@ -10,6 +10,7 @@ import {
   setDomainActive,
   setPrimaryDomain,
   updateDomain,
+  updateDomainAudited,
   type CreateDomainInput,
 } from "@/lib/supabase/queries/domains";
 import type { DomainRow } from "@/lib/bigcloak";
@@ -41,8 +42,12 @@ export function useDomainMutations() {
       onSuccess: invalidate,
     }),
     update: useMutation({
-      mutationFn: ({ id, patch }: { id: string; patch: Partial<DomainRow> }) =>
-        updateDomain(id, patch),
+      mutationFn: ({
+        id,
+        patch,
+        domain,
+      }: { id: string; patch: Partial<DomainRow>; domain?: DomainRow }) =>
+        domain ? updateDomainAudited(domain, patch) : updateDomain(id, patch),
       onSuccess: invalidate,
     }),
     setPrimary: useMutation({
@@ -50,11 +55,13 @@ export function useDomainMutations() {
       onSuccess: invalidate,
     }),
     archive: useMutation({
-      mutationFn: (id: string) => archiveDomain(id),
+      mutationFn: (arg: string | DomainRow) =>
+        typeof arg === "string" ? archiveDomain(arg) : archiveDomain(arg.id, arg),
       onSuccess: invalidate,
     }),
     restore: useMutation({
-      mutationFn: (id: string) => restoreDomain(id),
+      mutationFn: (arg: string | DomainRow) =>
+        typeof arg === "string" ? restoreDomain(arg) : restoreDomain(arg.id, arg),
       onSuccess: invalidate,
     }),
     setActive: useMutation({

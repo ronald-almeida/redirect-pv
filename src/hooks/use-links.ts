@@ -65,11 +65,13 @@ export function useLinkMutations() {
       onSuccess: invalidate,
     }),
     archive: useMutation({
-      mutationFn: (id: string) => archiveLink(id),
+      mutationFn: (arg: string | LinkRow) =>
+        typeof arg === "string" ? archiveLink(arg) : archiveLink(arg.id, arg),
       onSuccess: invalidate,
     }),
     restore: useMutation({
-      mutationFn: (id: string) => restoreLink(id),
+      mutationFn: (arg: string | LinkRow) =>
+        typeof arg === "string" ? restoreLink(arg) : restoreLink(arg.id, arg),
       onSuccess: invalidate,
     }),
     duplicate: useMutation({
