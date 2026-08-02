@@ -125,6 +125,31 @@ function SlugsPage() {
     [mutations.setDomain],
   );
 
+  const handleActivate = useCallback(
+    (l: LinkRow) => {
+      if (!canActivate(l)) {
+        toast.error("Adicione uma URL de destino antes de ativar este link.", {
+          action: { label: "Adicionar destino", onClick: () => setEditing(l) },
+        });
+        return;
+      }
+      mutations.activate.mutate(l, {
+        onSuccess: () => toast.success("Link ativado com sucesso"),
+        onError: (err) => toast.error(humanizeLinkError(err)),
+      });
+    },
+    [mutations.activate],
+  );
+
+  const handleDeactivate = useCallback(
+    (l: LinkRow) =>
+      mutations.deactivate.mutate(l, {
+        onSuccess: () => toast.success("Link colocado em espera"),
+        onError: (err) => toast.error(humanizeLinkError(err)),
+      }),
+    [mutations.deactivate],
+  );
+
   const activeCount = links.filter((l) => !l.archived_at).length;
   const archivedCount = links.length - activeCount;
 
