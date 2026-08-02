@@ -16,6 +16,7 @@ import {
   setLinkDomain,
   setLinkMode,
   updateLink,
+  updateLinkAudited,
 } from "@/lib/supabase/queries/links";
 
 export function useLinks() {
