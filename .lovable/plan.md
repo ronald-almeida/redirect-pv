@@ -1,85 +1,98 @@
 
-# Redesign CloakPanel — SaaS Premium
+# Big Cloak — Refatoração Estrutural (Plano em 6 Fases)
 
-Vou refazer toda a interface de administração com qualidade visual de Linear/Vercel/Stripe, mantendo 100% da lógica operacional existente (redirect handler, cache, latency tracking, supabase) — só mudo a camada de apresentação.
+Preservação absoluta do back-end, banco, edge functions, slugs em produção, tabelas, RLS e do handler `/lib/redirect-handler.ts`. Toda mudança é no front, na organização de componentes e na experiência.
 
-## Arquitetura de rotas
+## Identidade visual (aplicada a partir da Fase 2)
+
+- Fundo `#0A0A0A`, primária `#13C286`, superfícies `#111111`/`#161616`, bordas `rgba(255,255,255,0.06)`.
+- Tipografia: Geist Sans (UI) + Geist Mono (dados/slugs), via `<link>` em `__root.tsx`.
+- Tokens registrados em `src/styles.css` (`@theme inline`) — nada de cor hardcoded nos componentes.
+- Transições 150–200ms, skeletons, cantos 10–14px, sombras discretas.
+
+## Arquitetura-alvo de pastas
 
 ```text
-src/routes/
-  __root.tsx              → mantém shell
-  _admin.tsx              → layout NOVO com sidebar + topbar (auth gate)
-  _admin.index.tsx        → /admin (Links, era admin.tsx)
-  _admin.analytics.tsx    → /admin/analytics (redesenhado)
-  _admin.latency.tsx      → /admin/latency (redesenhado)
-  _admin.events.tsx       → /admin/events (NOVO)
-  _admin.settings.tsx     → /admin/settings (NOVO, abas)
+src/
+  components/
+    ui/                     (shadcn — intocado)
+    admin/
+      shell/                AppShell, TopBar, MobileTabBar, PageHeader
+      dashboard/            KpiCard, LiveClicks, DomainHealth, ActivityFeed
+      slugs/                SlugList, SlugRow, SlugSheet, SlugStatusPill, ModeToggle
+      domains/              DomainCard, DomainStatus, AddDomainSheet
+      events/               EventsTable, EventRow, EventsFilterBar
+      shared/               EmptyState, StatDelta, CopyButton, RelativeTime, LoadingSkeleton
+  hooks/
+    use-links.ts            react-query wrappers (list/create/update/archive)
+    use-domains.ts
+    use-clicks.ts           realtime + paged
+    use-admin-period.ts     (já existe: consolidar)
+    use-copy.ts, use-toast-shortcut.ts, use-hotkeys.ts
+  lib/
+    bigcloak.ts             (mantém — tipos/helpers)
+    redirect-handler.ts     (intocado)
+    supabase/queries/       links.ts, domains.ts, clicks.ts, alerts.ts
+    format.ts               nf, formatRel, formatClock, latencyTone (movidos de bigcloak)
+  routes/
+    admin.tsx               (só layout + <Outlet/>)
+    admin.index.tsx         Dashboard (fino, ~150 linhas)
+    admin.slugs.tsx         (novo — hoje mora dentro do admin.index)
+    admin.domains.tsx       (fino)
+    admin.events.tsx        (fino)
+    admin.analytics.tsx     (fino)
+    admin.latency.tsx       (fino)
+    admin.settings.tsx      (fino)
 ```
 
-Os arquivos antigos `admin.tsx`, `admin.analytics.tsx`, `admin.latency.tsx` serão substituídos. Removo o header duplicado em cada página — tudo passa pelo layout `_admin.tsx`.
+## Fase 1 — Arquitetura e Refatoração (essa entrega)
 
-## Componentes novos (src/components/admin/)
+Objetivo: quebrar os monólitos e preparar o terreno. **Zero mudança visual perceptível** — só reorganização e correções.
 
-- `AdminSidebar.tsx` — sidebar fixa, dark, 5 itens (Links, Analytics, Latência, Eventos, Configurações), ativo via `useRouterState`.
-- `AdminTopbar.tsx` — título da página, badge de ambiente (Production/Preview), busca global, seletor de período (7d/30d/90d), avatar admin com dropdown (Sair).
-- `MetricCard.tsx` — card de métrica com valor grande, delta %, ícone, sparkline (Recharts `<Line>` minimal, sem eixos).
-- `LinksTable.tsx` — tabela estilo Linear: linhas compactas, slug em destaque + descrição, badges de Status/Tipo/Cache, ações no hover (copiar, abrir, editar, duplicar, analytics, excluir via dropdown).
-- `Badge` variants — adiciono variantes semânticas no shadcn badge: `active`, `paused`, `waiting`, `real`, `decoy`, `mem`, `hit`, `stale`, `miss`.
-- `Sparkline.tsx` — wrapper minimal Recharts.
+1. **Corrigir o erro "Duplicate routes found with id: /"** que aparece no runtime (500 em `/`). Investigar `$.ts` vs `index.tsx` e ajustar sem quebrar o splat de redirect.
+2. **Quebrar `src/routes/admin.index.tsx` (1002 linhas)** em:
+   - `admin.index.tsx` → só orquestra Dashboard (KPIs + feed + alerts).
+   - `admin.slugs.tsx` → nova rota dedicada à lista/gestão de slugs.
+   - Componentes extraídos: `SlugList`, `SlugRow`, `SlugSheet` (create/edit), `ModeToggle`, `SlugStatusPill`, `CopyLinkButton`, `KpiCard`, `LiveClicksTicker`, `AlertBanner`.
+3. **Camada de dados** (`src/lib/supabase/queries/*`): centralizar todas as queries Supabase hoje espalhadas nas rotas. Rotas passam a chamar hooks (`useLinks`, `useDomains`, `useClicksFeed`), não `supabase.from(...)` direto.
+4. **React Query já está instalado** — padronizar `useQuery`/`useMutation` com invalidação correta; matar `useEffect(() => fetch...)` das rotas admin.
+5. **Realtime**: extrair a subscription do `admin.index` para `useLinksRealtime()` reutilizável (mantém o pulse verde).
+6. **Sidebar sem "Isca"** — confirmar remoção completa (rota e labels) e checar `AdminShell` (já OK).
+7. **Consolidar duplicações**:
+   - Formatadores em `src/lib/format.ts` (retirando de `bigcloak.ts`).
+   - Um único `StatusBadge`, `CopyButton`, `EmptyState`, `RelativeTime`.
+   - Remover código morto (analytics duplicados, imports não usados).
+8. **Correções de bugs conhecidos**:
+   - Slug duplicada: validação `unique(slug, domain_id)` no formulário (checa antes de submeter) + toast claro no erro Postgres 23505.
+   - `admin.tsx` layout mais fino — só shell + outlet.
+9. **Perf leve** (sem redesenhar):
+   - `React.memo` em `SlugRow`, `EventRow`.
+   - `useMemo` nas listas filtradas.
+   - Code-split das rotas pesadas via TanStack (já é automático — confirmar que componentes não são exportados).
+   - `staleTime` de 30s nos queries de contagem.
+10. **Validação de não-regressão** ao final da Fase 1:
+    - Build + typecheck limpo.
+    - Playwright: login → dashboard → criar slug → copiar link → arquivar → visitar redirect → confirmar 302.
+    - Diff funcional: mesmas features, mesmos endpoints, mesmo comportamento.
 
-## Páginas
+**O que a Fase 1 NÃO faz:** trocar cor, tipografia, layout mobile, redesenhar Dashboard ou Slugs. Isso é Fase 2/3/4.
 
-**Links (`/admin`)** — 4 MetricCards (Total Cliques, Latência Média, Slugs Ativos, Taxa Sucesso) com sparkline derivado de `clicks` + `latency_samples`. Abaixo, `LinksTable` substitui o grid de cards atual. Mantém modal de criar/editar link e toda a lógica do `admin.tsx` atual.
+## Fases seguintes (resumo — plano detalhado ao entrar em cada uma)
 
-**Analytics (`/admin/analytics`)** — grid de blocos: Volume de Cliques (área), Latência ao longo do tempo (linha multi-série p50/p95), Distribuição por tipo (donut real/isca/espera), Taxa de Sucesso (gauge/big number), Evolução diária (barras), Top Slugs (lista ranqueada). Tudo via Recharts já instalado.
+- **Fase 2 — Mobile First & Identidade**: paleta `#0A0A0A`/`#13C286`, Geist, `AppShell` mobile-first (bottom tab bar iOS-safe, header sticky com safe-area, inputs `text-base` para não dar zoom), navegação com poucos toques, skeletons.
+- **Fase 3 — Dashboard**: reprojetado — Online agora / Cliques hoje / Cliques mês / Slugs ativas / Latência média / Alertas. Fora: métricas técnicas, gráficos redundantes.
+- **Fase 4 — Slugs**: fluxo híbrido (Modal desktop / Bottom-sheet mobile), campos mínimos (Domínio · Nome · Slug · URL destino opcional). Sem URL → modo Espera automático. Copia o link e confirma. Ativar Modo Real com 1 clique na lista.
+- **Fase 5 — Domínios**: painel com status DNS/Worker/SSL, badge de saúde, ação "verificar agora", arquitetura pronta para plugar Cloudflare API depois (adapter isolado em `lib/cloudflare/`).
+- **Fase 6 — Eventos & Analytics**: tabela enxuta (horário · slug · domínio · destino · tempo · dispositivo). Auditoria administrativa fica em aba separada, fora da visão padrão.
 
-**Latência (`/admin/latency`)** — dashboard técnico: 6 stat tiles (p50, p95, p99, média, melhor, pior), gráfico Latência por Hora, gráfico empilhado por cache status, linha de cache hit ratio, 4 cards destaque MEM/HIT/STALE/MISS com contagem + percentual + p95 individual. Usa o RPC/query de `latency_samples` já existente.
+## Contrato de compatibilidade
 
-**Eventos (`/admin/events`)** — nova tabela derivada das fontes que JÁ existem: `clicks` (redirect realizado, 404 quando link não existe), `links` updates via `updated_at` vs `created_at` (criado/editado), `latency_samples` outliers. **Não invento eventos fictícios** — só agrego o que está no banco. Colunas: Data/Hora, Evento, Slug, Tipo, Detalhes. Filtros por tipo de evento e busca por slug. Coluna "Usuário" exibe "system" para eventos automáticos (não há multi-user no projeto).
+- Endpoints `/`, `/$`, `/r/$`, `/api/public/*` intocados.
+- `redirect-handler.ts` intocado.
+- Nenhuma migration nesta fase.
+- Nenhuma slug/rota removida.
+- Clientes ativos continuam funcionando exatamente como hoje.
 
-**Configurações (`/admin/settings`)** — Tabs shadcn:
-- **Geral**: nome do painel, fuso horário (read-only do browser), tema (forçado dark, informativo).
-- **Redirect**: URL de fallback global, comportamento default (real/isca/espera) — lê/escreve em `app_settings` se existir; se não existir, mostra os valores read-only do código com aviso.
-- **Cache**: TTL atual (do código), botão "Limpar cache" (chama `purgeSlugCache` global via server fn).
-- **Segurança**: lista de admins (linha única do usuário atual via `supabase.auth.getUser`), botão sair.
-- **Analytics**: retenção atual de `clicks` e `latency_samples` (informativo, lê configuração existente).
+## Entrego a Fase 1 assim que você aprovar
 
-Se uma aba não tiver dado real para mostrar, exibo placeholder "Sem configuração disponível neste ambiente" — não invento controles.
-
-## Design tokens (src/styles.css)
-
-Sobrescrevo `.dark` (já é o tema único):
-- `--background: #0A0A0A`
-- `--card: #0F0F10` com `border: #1C1C1F`
-- `--muted-foreground: #6B6B70`
-- `--primary: #FAFAFA` (texto/CTA primário branco, estilo Linear)
-- accent indigo `#6366F1` só em sparklines/gráficos
-- raio `--radius: 0.625rem`
-- shadow elegante `--shadow-card: 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px -12px rgba(0,0,0,0.6)`
-
-Tipografia: mantenho stack atual (system), aplico `font-feature-settings: "ss01","cv11"` e `tracking-tight` em headings.
-
-## Lógica preservada (não toco)
-
-- `src/lib/redirect-handler.ts` (hot path)
-- `src/routes/r.$slug.ts`
-- `src/integrations/supabase/*`
-- Esquema do banco e migrations
-- Auth flow
-
-## Critério de pronto
-
-- 5 rotas admin renderizam com sidebar + topbar consistentes
-- Tabela de Links mostra dados reais com badges e ações funcionais (copiar, abrir, editar, duplicar, excluir)
-- 4 métricas no topo com sparklines vindos do banco
-- Páginas Analytics e Latência mostram gráficos com dados reais (sem mocks)
-- Eventos e Configurações só expõem dados que existem; sem campos fictícios
-- Build passa, dark mode coerente, sem cor hardcoded em componentes
-
-## Fora de escopo
-
-- Mudanças no redirect handler ou no cache (já passou pela auditoria de performance)
-- Onboarding, planos, billing, integrações, domínios — todos removidos da UI
-- Multi-tenant / multi-user
-
-Aprovação para implementar?
+Depois valido com build + smoke test antes de te chamar para revisar. Cada fase seguinte segue o mesmo ritual: plano curto → executo → valido → mostro → você aprova a próxima.
