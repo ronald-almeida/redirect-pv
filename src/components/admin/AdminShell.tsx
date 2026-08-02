@@ -210,40 +210,10 @@ export function AdminShell({
         </nav>
 
         <div className="px-3 pb-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="group flex w-full items-center gap-2.5 rounded-[10px] border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-2 outline-none transition-colors hover:bg-sidebar-accent">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-secondary text-[11px] font-semibold text-foreground">
-                {initials}
-              </div>
-              <div className="min-w-0 flex-1 text-left">
-                <div className="truncate text-[12.5px] font-semibold">{displayName}</div>
-                <div className="truncate text-[10.5px] text-muted-foreground">Big Cloak</div>
-              </div>
-              <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-56">
-              <DropdownMenuLabel className="text-xs">
-                <div className="truncate font-semibold">{email || displayName}</div>
-                <div className="font-normal text-muted-foreground">Operador</div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link to="/admin/settings">
-                  <Settings className="h-3.5 w-3.5" />
-                  Configurações
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleSignOut}
-                className="text-destructive focus:text-destructive"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Sair
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <UserMenu onSignOut={handleSignOut} />
         </div>
       </aside>
+
 
       {/* ── Coluna principal ──────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -343,40 +313,8 @@ export function AdminShell({
             )}
 
             {rightSlot}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger className="tap hidden items-center gap-2.5 rounded-full border border-border bg-card py-1 pl-1 pr-3 outline-none hover:bg-secondary md:flex">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold">
-                  {initials}
-                </div>
-                <div className="text-left leading-tight">
-                  <div className="text-[12px] font-semibold">{displayName}</div>
-                  <div className="text-[10px] text-muted-foreground">Administrador</div>
-                </div>
-                <ChevronDown className="h-3 w-3 text-muted-foreground" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel className="text-xs">
-                  <div className="truncate font-semibold">{email || displayName}</div>
-                  <div className="font-normal text-muted-foreground">Operador</div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/admin/settings">
-                    <Settings className="h-3.5 w-3.5" />
-                    Configurações
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleSignOut}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
+
         </header>
 
         {/* Conteúdo — padding inferior reserva espaço para a barra do celular */}
