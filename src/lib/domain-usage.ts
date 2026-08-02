@@ -238,9 +238,8 @@ export function buildDomainTimeline(
   }
   if (d.archived_at) {
     events.push({ kind: "archived", label: "Domínio arquivado", at: d.archived_at });
-  } else if (d.last_health_at && d.created_at < d.last_health_at) {
-    // placeholder de restauração: só exibido quando existe registro posterior
   }
+
 
   return events
     .filter((e) => !!e.at)
