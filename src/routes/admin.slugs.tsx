@@ -14,7 +14,8 @@ import { useClicks } from "@/hooks/use-clicks";
 import { useDomains } from "@/hooks/use-domains";
 import { useLinks, useLinkMutations, useLinksRealtime } from "@/hooks/use-links";
 import type { LinkRow } from "@/lib/bigcloak";
-import { humanizeLinkError } from "@/lib/supabase/queries/links";
+import { toast } from "sonner";
+import { canActivate, humanizeLinkError } from "@/lib/supabase/queries/links";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/slugs")({
@@ -123,6 +124,31 @@ function SlugsPage() {
   const handlePickDomain = useCallback(
     (l: LinkRow, domain_id: string) => mutations.setDomain.mutate({ id: l.id, domain_id }),
     [mutations.setDomain],
+  );
+
+  const handleActivate = useCallback(
+    (l: LinkRow) => {
+      if (!canActivate(l)) {
+        toast.error("Adicione uma URL de destino antes de ativar este link.", {
+          action: { label: "Adicionar destino", onClick: () => setEditing(l) },
+        });
+        return;
+      }
+      mutations.activate.mutate(l, {
+        onSuccess: () => toast.success("Link ativado com sucesso"),
+        onError: (err) => toast.error(humanizeLinkError(err)),
+      });
+    },
+    [mutations.activate],
+  );
+
+  const handleDeactivate = useCallback(
+    (l: LinkRow) =>
+      mutations.deactivate.mutate(l, {
+        onSuccess: () => toast.success("Link colocado em espera"),
+        onError: (err) => toast.error(humanizeLinkError(err)),
+      }),
+    [mutations.deactivate],
   );
 
   const activeCount = links.filter((l) => !l.archived_at).length;
@@ -237,6 +263,8 @@ function SlugsPage() {
                           onRestore={handleRestore}
                           onDuplicate={handleDuplicate}
                           onPickDomain={handlePickDomain}
+                          onActivate={handleActivate}
+                          onDeactivate={handleDeactivate}
                         />
                       );
                     })}
@@ -262,6 +290,8 @@ function SlugsPage() {
                       onArchive={handleArchive}
                       onRestore={handleRestore}
                       onDuplicate={handleDuplicate}
+                      onActivate={handleActivate}
+                      onDeactivate={handleDeactivate}
                     />
                   );
                 })}

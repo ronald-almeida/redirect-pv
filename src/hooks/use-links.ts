@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { LinkRow, Mode } from "@/lib/bigcloak";
 import {
+  activateLink,
   archiveLink,
   createLink,
+  deactivateLink,
   deleteLink,
   duplicateLink,
   fetchLinks,
@@ -40,6 +42,14 @@ export function useLinkMutations() {
     }),
     setMode: useMutation({
       mutationFn: ({ id, mode }: { id: string; mode: Mode }) => setLinkMode(id, mode),
+      onSuccess: invalidate,
+    }),
+    activate: useMutation({
+      mutationFn: (link: LinkRow) => activateLink(link),
+      onSuccess: invalidate,
+    }),
+    deactivate: useMutation({
+      mutationFn: (link: LinkRow) => deactivateLink(link),
       onSuccess: invalidate,
     }),
     setActive: useMutation({

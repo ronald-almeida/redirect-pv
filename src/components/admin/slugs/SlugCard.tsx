@@ -1,4 +1,13 @@
-import { Archive, ArchiveRestore, Check, Copy, Edit3, MoreHorizontal } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Check,
+  Copy,
+  Edit3,
+  MoreHorizontal,
+  PauseCircle,
+  Play,
+} from "lucide-react";
 import type { LinkRow } from "@/lib/bigcloak";
 import { formatRel, nf } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -23,6 +32,8 @@ interface SlugCardProps {
   onArchive: (l: LinkRow) => void;
   onRestore: (l: LinkRow) => void;
   onDuplicate: (l: LinkRow) => void;
+  onActivate: (l: LinkRow) => void;
+  onDeactivate: (l: LinkRow) => void;
 }
 
 function statusKind(l: LinkRow): "active" | "paused" | "waiting" {
@@ -90,6 +101,16 @@ export function SlugCard(props: SlugCardProps) {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
+            {!link.archived_at &&
+              (link.mode === "waiting" ? (
+                <DropdownMenuItem onClick={() => props.onActivate(link)}>
+                  <Play className="mr-2 h-3.5 w-3.5" /> Ativar link
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => props.onDeactivate(link)}>
+                  <PauseCircle className="mr-2 h-3.5 w-3.5" /> Colocar em espera
+                </DropdownMenuItem>
+              ))}
             <DropdownMenuItem onClick={() => props.onDuplicate(link)}>Duplicar</DropdownMenuItem>
             <DropdownMenuSeparator />
             {link.archived_at ? (
