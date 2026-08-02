@@ -127,41 +127,59 @@ export type Database = {
       domains: {
         Row: {
           active: boolean
+          archived_at: string | null
           cf_zone_id: string | null
           check_error: string | null
           created_at: string
+          description: string | null
           dns_status: string
           domain: string
+          health_status: string
           id: string
           is_primary: boolean
           last_checked_at: string | null
+          last_health_at: string | null
           notes: string | null
+          ssl_status: string
+          updated_at: string
           worker_status: string
         }
         Insert: {
           active?: boolean
+          archived_at?: string | null
           cf_zone_id?: string | null
           check_error?: string | null
           created_at?: string
+          description?: string | null
           dns_status?: string
           domain: string
+          health_status?: string
           id?: string
           is_primary?: boolean
           last_checked_at?: string | null
+          last_health_at?: string | null
           notes?: string | null
+          ssl_status?: string
+          updated_at?: string
           worker_status?: string
         }
         Update: {
           active?: boolean
+          archived_at?: string | null
           cf_zone_id?: string | null
           check_error?: string | null
           created_at?: string
+          description?: string | null
           dns_status?: string
           domain?: string
+          health_status?: string
           id?: string
           is_primary?: boolean
           last_checked_at?: string | null
+          last_health_at?: string | null
           notes?: string | null
+          ssl_status?: string
+          updated_at?: string
           worker_status?: string
         }
         Relationships: []
