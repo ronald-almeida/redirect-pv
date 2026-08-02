@@ -1,121 +1,318 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { Link2, MousePointerClick, Activity, Target } from "lucide-react";
-import { AdminShell, type AdminPeriod } from "@/components/admin/AdminShell";
-import { MetricCard } from "@/components/admin/MetricCard";
-import { ClickDistribution } from "@/components/admin/dashboard/ClickDistribution";
-import { LatencyTrend } from "@/components/admin/dashboard/LatencyTrend";
-import { RedirectStatus } from "@/components/admin/dashboard/RedirectStatus";
-import { useAdminFilters, shellPeriodProps } from "@/hooks/use-admin-filters";
-import { useClicks } from "@/hooks/use-clicks";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { AdminShell } from "@/components/admin/AdminShell";
+import { KpiCard } from "@/components/admin/dashboard/KpiCard";
+import { SystemHealth, type HealthItem } from "@/components/admin/dashboard/SystemHealth";
+import { AlertsPanel } from "@/components/admin/dashboard/AlertsPanel";
+import { RecentActivity, type ActivityItem } from "@/components/admin/dashboard/RecentActivity";
+import { QuickActions } from "@/components/admin/dashboard/QuickActions";
+import { ClicksOverTime } from "@/components/admin/dashboard/ClicksOverTime";
+import { ClicksByDomain } from "@/components/admin/dashboard/ClicksByDomain";
 import { useLinks, useLinksRealtime } from "@/hooks/use-links";
-import { bucketCounts, bucketLatency, latencySeries } from "@/lib/supabase/queries/clicks";
+import { useDomains } from "@/hooks/use-domains";
+import {
+  useDashboardRealtime,
+  useDashboardSeries,
+  useDashboardTotals,
+  useDismissAlert,
+  useOpenAlerts,
+  useRecentClicks,
+  waitingClicksByLink,
+  type ChartPreset,
+} from "@/hooks/use-dashboard";
+import { buildDashboardAlerts, type DashboardAlert } from "@/lib/dashboard-alerts";
+import { rateLatency } from "@/lib/latency-rating";
+import { linkTitle } from "@/lib/bigcloak";
 import { nf } from "@/lib/format";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
     meta: [
-      { title: "Visão Geral · Big Cloak" },
-      { name: "description", content: "Painel operacional do Big Cloak: cliques, latência e saúde dos redirecionamentos." },
+      { title: "Painel Operacional · Big Cloak" },
+      {
+        name: "description",
+        content:
+          "Central de comando do Big Cloak: acessos, saúde do sistema, atividade recente e alertas em um só lugar.",
+      },
+      { property: "og:title", content: "Painel Operacional · Big Cloak" },
+      {
+        property: "og:description",
+        content: "Acompanhe acessos, velocidade de redirecionamento e alertas operacionais.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: DashboardPage,
 });
 
-const PERIOD_SHORT: Record<AdminPeriod, string> = {
-  today: "Hoje",
-  yesterday: "Ontem",
-  "7d": "7 dias",
-  "30d": "30 dias",
-  custom: "Período",
-};
+function delta(current: number, previous: number): number | null {
+  if (!previous) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function hhmm(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+}
 
 function DashboardPage() {
-  const filters = useAdminFilters("today");
-  const { data: links = [] } = useLinks();
-  const { clicks } = useClicks(filters.range);
-  useLinksRealtime();
+  const [chart, setChart] = useState<ChartPreset>("today");
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const alertsRef = useRef<HTMLDivElement>(null);
 
-  // Recalcula séries a cada minuto para que os baldes "até agora" avancem.
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 60_000);
-    return () => clearInterval(id);
+  const linksQ = useLinks();
+  const domainsQ = useDomains();
+  const totalsQ = useDashboardTotals();
+  const seriesQ = useDashboardSeries(chart);
+  const recentQ = useRecentClicks();
+  const alertsQ = useOpenAlerts();
+  const dismissMutation = useDismissAlert();
+  useLinksRealtime();
+  useDashboardRealtime();
+
+  const links = useMemo(() => linksQ.data ?? [], [linksQ.data]);
+  const domains = domainsQ.domains;
+  const series = useMemo(() => seriesQ.data ?? [], [seriesQ.data]);
+  const totals = totalsQ.data;
+
+  const linkById = useMemo(() => new Map(links.map((l) => [l.id, l])), [links]);
+  const domainById = useMemo(() => new Map(domains.map((d) => [d.id, d])), [domains]);
+
+  /* ── Visão geral ─────────────────────────────────────────────────── */
+  const live = useMemo(() => links.filter((l) => !l.archived_at), [links]);
+  const activeLinks = useMemo(
+    () => live.filter((l) => l.active && l.mode === "real").length,
+    [live],
+  );
+  const waitingLinks = useMemo(() => live.filter((l) => l.mode !== "real").length, [live]);
+  const activeDomains = domainsQ.activeDomains.length;
+  const avgMs = totals?.avgMsToday ?? 0;
+  const latency = rateLatency(avgMs);
+
+  /* ── Saúde operacional ───────────────────────────────────────────── */
+  const healthItems = useMemo<HealthItem[]>(() => {
+    const dbOk = !totalsQ.isError && !linksQ.isError;
+    const attentionDomains = domains.filter(
+      (d) => !d.archived_at && (!d.active || d.check_error),
+    ).length;
+
+    const redirectState =
+      latency.grade === "unknown"
+        ? "idle"
+        : latency.grade === "slow"
+          ? "bad"
+          : latency.grade === "attention"
+            ? "warn"
+            : "ok";
+
+    return [
+      {
+        label: "Sistema",
+        status: dbOk ? "Online" : "Offline",
+        state: dbOk ? "ok" : "bad",
+      },
+      {
+        label: "Banco de dados",
+        status: dbOk ? "Operacional" : "Indisponível",
+        state: dbOk ? "ok" : "bad",
+      },
+      {
+        label: "Redirecionamentos",
+        status:
+          redirectState === "ok"
+            ? "Normais"
+            : redirectState === "warn"
+              ? "Lentos"
+              : redirectState === "bad"
+                ? "Com falhas"
+                : "Sem acessos hoje",
+        state: redirectState,
+      },
+      {
+        label: "Domínios",
+        status: !domains.length
+          ? "Nenhum cadastrado"
+          : attentionDomains
+            ? `${attentionDomains} com atenção`
+            : "Todos operacionais",
+        state: !domains.length ? "idle" : attentionDomains ? "warn" : "ok",
+      },
+    ];
+  }, [domains, latency.grade, linksQ.isError, totalsQ.isError]);
+
+  /* ── Atividade recente ───────────────────────────────────────────── */
+  const activity = useMemo<ActivityItem[]>(() => {
+    const rows = recentQ.data ?? [];
+    return rows.map((c, i) => {
+      const l = linkById.get(c.link_id);
+      const dom = l?.domain_id ? domainById.get(l.domain_id)?.domain : undefined;
+      return {
+        id: `${c.link_id}-${c.created_at}-${i}`,
+        time: hhmm(c.created_at),
+        name: l ? linkTitle(l) : "Link removido",
+        slug: l?.slug ?? "—",
+        domain: dom ?? c.host ?? "",
+        ms: c.redirect_ms ?? null,
+        redirected: !c.mode_at_click.startsWith("waiting"),
+      };
+    });
+  }, [recentQ.data, linkById, domainById]);
+
+  /* ── Cliques por domínio ─────────────────────────────────────────── */
+  const byDomain = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of series) {
+      const l = linkById.get(c.link_id);
+      const name =
+        (l?.domain_id ? domainById.get(l.domain_id)?.domain : undefined) ??
+        c.host ??
+        "Sem domínio";
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([domain, clicks]) => ({ domain, clicks }))
+      .sort((a, b) => b.clicks - a.clicks);
+  }, [series, linkById, domainById]);
+
+  /* ── Alertas ─────────────────────────────────────────────────────── */
+  const alerts = useMemo(() => {
+    const all = buildDashboardAlerts({
+      links,
+      domains,
+      alerts: alertsQ.data ?? [],
+      waitingClicksByLink: waitingClicksByLink(series),
+    });
+    return all.filter((a) => !dismissed.has(a.id));
+  }, [links, domains, alertsQ.data, series, dismissed]);
+
+  const criticalCount = alerts.filter((a) => a.level === "critical").length;
+
+  const handleDismiss = useCallback(
+    (a: DashboardAlert) => {
+      setDismissed((prev) => new Set(prev).add(a.id));
+      if (a.rowId) dismissMutation.mutate(a.rowId);
+    },
+    [dismissMutation],
+  );
+
+  const scrollToAlerts = useCallback(() => {
+    alertsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  const metrics = useMemo(() => {
-    const totalClicks = clicks.length;
-    const activeSlugs = links.filter((l) => l.active).length;
-    const latencies = links.map((l) => l.avg_redirect_ms ?? 0).filter((n) => n > 0);
-    const avgLatency = latencies.length
-      ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
-      : 0;
-    const resolved = clicks.filter(
-      (c) => c.mode_at_click.startsWith("real") || c.mode_at_click.startsWith("decoy"),
-    ).length;
-    const success = totalClicks ? Math.round((resolved / totalClicks) * 1000) / 10 : 0;
-
-    return {
-      totalClicks,
-      activeSlugs,
-      avgLatency,
-      success,
-      totalSpark: bucketCounts(clicks, filters.range),
-      latSpark: bucketLatency(clicks, filters.range),
-    };
-  }, [clicks, links, filters.range]);
-
-  const latSeries = useMemo(() => latencySeries(clicks, filters.range), [clicks, filters.range]);
-  const periodLabel = PERIOD_SHORT[filters.period];
+  const kpiLoading = totalsQ.isLoading;
 
   return (
-    <AdminShell {...shellPeriodProps(filters)}>
-      <div className="max-w-[1480px] space-y-8 px-4 py-8 md:px-10 md:py-9">
-        <header className="border-b border-border/60 pb-6">
-          <h1 className="text-[28px] font-bold leading-[1.1] tracking-tight md:text-[40px] md:leading-[1.05]">
-            Visão Geral
+    <AdminShell>
+      <div className="mx-auto max-w-[1400px] space-y-5 px-4 py-5 md:space-y-6 md:px-8 md:py-7">
+        <header>
+          <h1 className="text-[22px] font-bold leading-tight tracking-tight md:text-[28px]">
+            Painel Operacional
           </h1>
-          <p className="mt-2 text-[13px] font-light text-muted-foreground/80 md:mt-2.5 md:text-[14px]">
-            Acompanhe o desempenho dos seus links em tempo real
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            O que está acontecendo agora com seus links e domínios
           </p>
         </header>
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
-          <MetricCard
-            label="Cliques no total"
-            value={nf(metrics.totalClicks)}
-            icon={MousePointerClick}
-            series={metrics.totalSpark}
-            accent="lime"
+        <QuickActions onAlerts={scrollToAlerts} alertCount={criticalCount || alerts.length} />
+
+        {/* Alertas críticos vêm antes de tudo */}
+        {criticalCount > 0 && (
+          <div ref={alertsRef}>
+            <AlertsPanel
+              alerts={alerts.filter((a) => a.level === "critical")}
+              onDismiss={handleDismiss}
+            />
+          </div>
+        )}
+
+        {/* 1 — Visão geral */}
+        <section className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-6">
+          <KpiCard
+            label="Cliques hoje"
+            value={nf(totals?.clicksToday ?? 0)}
+            delta={delta(totals?.clicksToday ?? 0, totals?.clicksYesterday ?? 0)}
+            deltaLabel="vs. ontem"
+            hint="Nenhum acesso até agora"
+            loading={kpiLoading}
           />
-          <MetricCard
-            label="Latência média"
-            value={metrics.avgLatency}
-            suffix="ms"
-            icon={Activity}
-            series={metrics.latSpark}
-            accent="violet"
+          <KpiCard
+            label="Cliques no mês"
+            value={nf(totals?.clicksMonth ?? 0)}
+            delta={delta(totals?.clicksMonth ?? 0, totals?.clicksPrevMonth ?? 0)}
+            deltaLabel="vs. mês anterior"
+            hint="Mês em andamento"
+            loading={kpiLoading}
           />
-          <MetricCard
-            label="Slugs ativos"
-            value={metrics.activeSlugs}
-            icon={Link2}
-            accent="cyan"
-            suffix={`/ ${links.length}`}
+          <KpiCard
+            label="Links ativos"
+            value={nf(activeLinks)}
+            hint="Redirecionando normalmente"
+            loading={linksQ.isLoading}
           />
-          <MetricCard
-            label="Taxa de sucesso"
-            value={`${metrics.success.toFixed(1)}%`}
-            icon={Target}
-            accent="orange"
+          <KpiCard
+            label="Links em espera"
+            value={nf(waitingLinks)}
+            hint="Mostram a página de espera"
+            loading={linksQ.isLoading}
+          />
+          <KpiCard
+            label="Domínios ativos"
+            value={nf(activeDomains)}
+            hint={domains.length ? `${domains.length} cadastrados` : "Nenhum cadastrado"}
+            loading={domainsQ.isLoading}
+          />
+          <KpiCard
+            label="Tempo de redirecionamento"
+            value={avgMs ? nf(avgMs) : "—"}
+            unit={avgMs ? "ms" : undefined}
+            badge={{ label: latency.label, className: latency.className }}
+            hint="Média dos acessos de hoje"
+            loading={kpiLoading}
           />
         </section>
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <ClickDistribution clicks={clicks} periodLabel={periodLabel} />
-          <LatencyTrend series={latSeries} periodLabel={periodLabel} />
-          <RedirectStatus clicks={clicks} periodLabel={periodLabel} />
-        </section>
+        {/* 2 — Saúde + 4 — Alertas */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <SystemHealth
+            items={healthItems}
+            checkedAt={totals?.checkedAt}
+            loading={kpiLoading}
+          />
+          <div ref={criticalCount > 0 ? undefined : alertsRef}>
+            <AlertsPanel
+              alerts={criticalCount > 0 ? alerts.filter((a) => a.level !== "critical") : alerts}
+              loading={alertsQ.isLoading && linksQ.isLoading}
+              onDismiss={handleDismiss}
+            />
+          </div>
+        </div>
+
+        {/* Gráficos */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
+          <ClicksOverTime
+            clicks={series}
+            preset={chart}
+            onPreset={setChart}
+            loading={seriesQ.isLoading}
+            error={seriesQ.isError}
+          />
+          <ClicksByDomain
+            data={byDomain}
+            loading={seriesQ.isLoading || domainsQ.isLoading}
+            hasDomains={domains.length > 0}
+          />
+        </div>
+
+        {/* 3 — Atividade recente */}
+        <RecentActivity
+          items={activity}
+          loading={recentQ.isLoading}
+          error={recentQ.isError}
+        />
       </div>
     </AdminShell>
   );
