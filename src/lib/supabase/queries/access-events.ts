@@ -134,4 +134,5 @@ export async function fetchAccessFacets(range: DateRange) {
     if (r.device) devices.add(r.device);
     if (r.country) countries.add(r.country);
   }
-  return { devices: [...devices].sort(), countries: [...
+  return { devices: [...devices].sort(), countries: [...countries].sort() };
+}
