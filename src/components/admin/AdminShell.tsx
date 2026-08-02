@@ -1,5 +1,6 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
+  LayoutDashboard,
   LinkIcon,
   BarChart3,
   Activity,
@@ -31,6 +32,7 @@ import type { DateRange as RDPRange } from "react-day-picker";
 
 type NavTo =
   | "/admin"
+  | "/admin/slugs"
   | "/admin/analytics"
   | "/admin/latency"
   | "/admin/events"
@@ -45,7 +47,8 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-  { to: "/admin", label: "Links", shortLabel: "Links", icon: LinkIcon },
+  { to: "/admin", label: "Visão Geral", shortLabel: "Geral", icon: LayoutDashboard },
+  { to: "/admin/slugs", label: "Links", shortLabel: "Links", icon: LinkIcon },
   { to: "/admin/analytics", label: "Analytics", shortLabel: "Analytics", icon: BarChart3 },
   { to: "/admin/latency", label: "Latência", shortLabel: "Latência", icon: Activity },
   { to: "/admin/domains", label: "Domínios", shortLabel: "Domínios", icon: Globe },
