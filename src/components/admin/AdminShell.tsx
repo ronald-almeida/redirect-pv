@@ -8,7 +8,6 @@ import {
   Globe,
   Settings,
   ChevronDown,
-  ChevronUp,
   LogOut,
   MoreHorizontal,
   Calendar as CalendarIcon,
@@ -24,11 +23,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { UserMenu } from "@/components/admin/UserMenu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DateRange as RDPRange } from "react-day-picker";
+
 
 type NavTo =
   | "/admin"
@@ -350,9 +351,21 @@ export function AdminShell({
               <span>Mais</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="end" className="mb-2 w-52">
-              <DropdownMenuLabel className="text-xs">
-                <div className="truncate font-semibold">{email || displayName}</div>
+              <DropdownMenuLabel className="flex items-center gap-2 text-xs">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-secondary text-[10px] font-semibold">
+                  {initials}
+                </span>
+                <span className="truncate font-semibold">{displayName}</span>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to="/admin/settings">
+                  <Settings className="h-3.5 w-3.5" />
+                  Configurações
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+
               <DropdownMenuSeparator />
               {MOBILE_OVERFLOW.map((item) => (
                 <DropdownMenuItem key={item.to} asChild>
