@@ -1,24 +1,31 @@
-import { useMemo, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { DateRange } from "@/lib/date-range";
+import { supabase } from "@/integrations/supabase/client";
 import {
   accessKey,
   fetchAccessFacets,
   fetchAccessPage,
+  resultOf,
   type AccessFilters,
+  type AccessRow,
   DEFAULT_ACCESS_FILTERS,
 } from "@/lib/supabase/queries/access-events";
 import type { DomainRow, LinkRow } from "@/lib/bigcloak";
 
 /**
- * Eventos operacionais paginados. A busca textual é resolvida sobre a lista
- * de links (pequena) e convertida num `in(link_id)` executado no banco.
+ * Eventos operacionais com scroll infinito. A busca textual é resolvida sobre
+ * a lista de links (pequena) e convertida num `in(link_id)` executado no banco.
+ * O Realtime cobre apenas eventos recentes: novos acessos entram no topo.
  */
 export function useAccessEvents(range: DateRange, links: LinkRow[], domains: DomainRow[]) {
   const [filters, setFilters] = useState<AccessFilters>(DEFAULT_ACCESS_FILTERS);
+  const [live, setLive] = useState<AccessRow[]>([]);
 
-  const patch = (p: Partial<AccessFilters>) =>
-    setFilters((f) => ({ ...f, ...p, page: p.page ?? 0 }));
+  const patch = (p: Partial<AccessFilters>) => {
+    setLive([]);
+    setFilters((f) => ({ ...f, ...p }));
+  };
 
   const domainById = useMemo(
     () => new Map(domains.map((d) => [d.id, d.domain])),
@@ -47,12 +54,13 @@ export function useAccessEvents(range: DateRange, links: LinkRow[], domains: Dom
       .map((l) => l.id);
   }, [links, filters.search, filters.domainId, filters.linkId, domainById]);
 
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: accessKey(range, filters, linkIds),
-    queryFn: () => fetchAccessPage(range, filters, linkIds),
+    queryFn: ({ pageParam }) => fetchAccessPage(range, filters, linkIds, pageParam as number),
+    initialPageParam: 0,
+    getNextPageParam: (last) => last.nextOffset,
     enabled: !!range.start,
     staleTime: 10_000,
-    placeholderData: keepPreviousData,
   });
 
   const facets = useQuery({
@@ -62,13 +70,63 @@ export function useAccessEvents(range: DateRange, links: LinkRow[], domains: Dom
     staleTime: 120_000,
   });
 
+  const pages = query.data?.pages ?? [];
+  const fetched = useMemo(() => pages.flatMap((p) => p.rows), [pages]);
+
+  /** Filtros aplicados a um evento chegado por Realtime. */
+  const matchesRef = useRef<(r: AccessRow) => boolean>(() => false);
+  matchesRef.current = (r: AccessRow) => {
+    if (range.start && new Date(r.created_at) < range.start) return false;
+    if (range.end && new Date(r.created_at) >= range.end) return false;
+    if (linkIds && !linkIds.includes(r.link_id)) return false;
+    if (filters.device !== "all" && r.device !== filters.device) return false;
+    if (filters.country !== "all" && r.country !== filters.country) return false;
+    if (filters.result !== "all" && resultOf(r.mode_at_click) !== filters.result) return false;
+    return true;
+  };
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("access-events-live")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "clicks" },
+        (payload) => {
+          const row = payload.new as AccessRow;
+          if (!row?.id || !matchesRef.current(row)) return;
+          setLive((prev) =>
+            prev.some((p) => p.id === row.id) ? prev : [row, ...prev].slice(0, 50),
+          );
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const rows = useMemo(() => {
+    if (live.length === 0) return fetched;
+    const seen = new Set(fetched.map((r) => r.id));
+    return [...live.filter((r) => !seen.has(r.id)), ...fetched];
+  }, [live, fetched]);
+
+  const total = (pages[0]?.total ?? 0) + live.filter((l) => !fetched.some((f) => f.id === l.id)).length;
+
+  const reset = useCallback(() => {
+    setLive([]);
+    setFilters(DEFAULT_ACCESS_FILTERS);
+  }, []);
+
   return {
     ...query,
-    rows: query.data?.rows ?? [],
-    total: query.data?.total ?? 0,
+    rows,
+    total,
+    liveCount: live.length,
     filters,
     patch,
-    reset: () => setFilters(DEFAULT_ACCESS_FILTERS),
+    reset,
     devices: facets.data?.devices ?? [],
     countries: facets.data?.countries ?? [],
   };
