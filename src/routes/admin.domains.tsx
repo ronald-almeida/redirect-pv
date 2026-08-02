@@ -49,43 +49,10 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "archived", label: "Arquivados" },
 ];
 
-const DAY = 24 * 60 * 60 * 1000;
-
-function buildStats(links: LinkRow[]): DomainStats {
-  const now = Date.now();
-  let clicks = 0;
-  let recentClicks = 0;
-  let lastClickAt: string | null = null;
-  let msSum = 0;
-  let msCount = 0;
-
-  for (const l of links) {
-    clicks += l.click_count ?? 0;
-    if (l.last_click_at) {
-      if (!lastClickAt || l.last_click_at > lastClickAt) lastClickAt = l.last_click_at;
-      if (now - new Date(l.last_click_at).getTime() < DAY) recentClicks += l.click_count ?? 0;
-    }
-    const ms = (l as { avg_redirect_ms?: number | null }).avg_redirect_ms ?? 0;
-    if (ms > 0) {
-      msSum += ms;
-      msCount += 1;
-    }
-  }
-
-  return {
-    totalSlugs: links.length,
-    activeSlugs: links.filter((l) => !l.archived_at && l.active && l.mode !== "waiting").length,
-    waitingSlugs: links.filter((l) => !l.archived_at && l.mode === "waiting").length,
-    clicks,
-    recentClicks,
-    lastClickAt,
-    avgRedirectMs: msCount ? Math.round(msSum / msCount) : 0,
-  };
-}
-
 function DomainsPage() {
   const { domains, isLoading } = useDomains();
   const { data: links = [] } = useLinks();
+  const { getUsage } = useDomainUsage(domains, links);
   const m = useDomainMutations();
 
   const [query, setQuery] = useState("");
@@ -94,16 +61,6 @@ function DomainsPage() {
   const [editing, setEditing] = useState<DomainRow | null>(null);
   const [drawerDomain, setDrawerDomain] = useState<DomainRow | null>(null);
 
-  const statsByDomain = useMemo(() => {
-    const map = new Map<string, DomainStats>();
-    for (const d of domains) {
-      map.set(
-        d.id,
-        buildStats(links.filter((l) => l.domain_id === d.id)),
-      );
-    }
-    return map;
-  }, [domains, links]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
