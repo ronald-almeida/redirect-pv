@@ -127,4 +127,21 @@ export function dashboardSeriesKey(range: DateRange) {
     "dashboard",
     "series",
     range.start?.toISOString() ?? null,
-    range.end?.toISOString()
+    range.end?.toISOString() ?? null,
+  ] as const;
+}
+
+/** Cliques dentro da janela — usados no gráfico + feed + agregação por domínio. */
+export async function fetchDashboardSeries(range: DateRange): Promise<DashClick[]> {
+  if (!range.start) return [];
+  let q = supabase
+    .from("clicks")
+    .select(DASH_SELECT)
+    .gte("created_at", range.start.toISOString())
+    .order("created_at", { ascending: false })
+    .limit(3000);
+  if (range.end) q = q.lt("created_at", range.end.toISOString());
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as unknown as DashClick[];
+}
