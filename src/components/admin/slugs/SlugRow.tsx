@@ -136,7 +136,25 @@ export function SlugRow(props: SlugRowProps) {
                   </DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem onClick={() => props.onDeactivate(link)}>
-                    <PauseCircle className="mr-2 h-3.5 w-3.5" /> Col
+                    <PauseCircle className="mr-2 h-3.5 w-3.5" /> Colocar em espera
+                  </DropdownMenuItem>
+                ))}
+              <DropdownMenuItem onClick={() => props.onDuplicate(link)}>Duplicar</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {link.archived_at ? (
+                <DropdownMenuItem onClick={() => props.onRestore(link)}>
+                  <ArchiveRestore className="mr-2 h-3.5 w-3.5" /> Restaurar
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  onClick={() => props.onArchive(link)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Archive className="mr-2 h-3.5 w-3.5" /> Arquivar
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </td>
     </tr>
