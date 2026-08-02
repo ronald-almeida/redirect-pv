@@ -234,17 +234,7 @@ function DomainsPage() {
               <DomainCard
                 key={d.id}
                 domain={d}
-                stats={
-                  statsByDomain.get(d.id) ?? {
-                    totalSlugs: 0,
-                    activeSlugs: 0,
-                    waitingSlugs: 0,
-                    clicks: 0,
-                    recentClicks: 0,
-                    lastClickAt: null,
-                    avgRedirectMs: 0,
-                  }
-                }
+                usage={getUsage(d.id)}
                 onViewSlugs={setDrawerDomain}
                 onSetPrimary={setPrimary}
                 onEdit={openEdit}
@@ -267,8 +257,10 @@ function DomainsPage() {
       <DomainSlugsDrawer
         domain={drawerDomain}
         links={links.filter((l) => l.domain_id === drawerDomain?.id)}
+        usage={drawerDomain ? getUsage(drawerDomain.id) : EMPTY_USAGE}
         onOpenChange={(open) => !open && setDrawerDomain(null)}
       />
+
     </AdminShell>
   );
 }
