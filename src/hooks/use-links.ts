@@ -38,7 +38,9 @@ export function useLinkMutations() {
       onSuccess: invalidate,
     }),
     update: useMutation({
-      mutationFn: ({ id, patch }: { id: string; patch: Partial<LinkRow> }) => updateLink(id, patch),
+      // `link` opcional: quando enviado, a alteração entra no Histórico com antes/depois.
+      mutationFn: ({ id, patch, link }: { id: string; patch: Partial<LinkRow>; link?: LinkRow }) =>
+        link ? updateLinkAudited(link, patch) : updateLink(id, patch),
       onSuccess: invalidate,
     }),
     setMode: useMutation({
