@@ -28,7 +28,6 @@ import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DateRange as RDPRange } from "react-day-picker";
-import iconUrl from "/big-cloak-icon.png?url";
 
 type NavTo =
   | "/admin"
@@ -112,7 +111,7 @@ function BrandMark({ size = 36 }: { size?: number }) {
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <div className="absolute inset-0 rounded-[10px] bg-primary/20 blur-md" />
       <img
-        src={iconUrl}
+        src="/big-cloak-icon.png"
         alt="Big Cloak"
         width={size}
         height={size}
