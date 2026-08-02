@@ -128,6 +128,10 @@ export type Database = {
         Row: {
           active: boolean
           archived_at: string | null
+          cf_api_token_secret: string | null
+          cf_dns_status: string
+          cf_ssl_status: string
+          cf_worker_status: string
           cf_zone_id: string | null
           check_error: string | null
           created_at: string
@@ -147,6 +151,10 @@ export type Database = {
         Insert: {
           active?: boolean
           archived_at?: string | null
+          cf_api_token_secret?: string | null
+          cf_dns_status?: string
+          cf_ssl_status?: string
+          cf_worker_status?: string
           cf_zone_id?: string | null
           check_error?: string | null
           created_at?: string
@@ -166,6 +174,10 @@ export type Database = {
         Update: {
           active?: boolean
           archived_at?: string | null
+          cf_api_token_secret?: string | null
+          cf_dns_status?: string
+          cf_ssl_status?: string
+          cf_worker_status?: string
           cf_zone_id?: string | null
           check_error?: string | null
           created_at?: string
