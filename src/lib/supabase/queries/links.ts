@@ -60,6 +60,60 @@ export async function setLinkDomain(id: string, domain_id: string | null) {
   return updateLink(id, { domain_id });
 }
 
+/** Registra uma ação no histórico interno (link_audit). */
+async function logAudit(link: LinkRow, action: string, detail: Record<string, unknown>) {
+  await supabase.from("link_audit").insert({
+    link_id: link.id,
+    slug: link.slug,
+    action,
+    detail: detail as never,
+    actor: "operator",
+  });
+}
+
+export class MissingRealUrlError extends Error {
+  constructor() {
+    super("Adicione uma URL de destino antes de ativar este link.");
+    this.name = "MissingRealUrlError";
+  }
+}
+
+export function canActivate(l: LinkRow): boolean {
+  const hasList = Array.isArray(l.real_urls) && l.real_urls.length > 0;
+  return !!(l.real_url?.trim() || hasList);
+}
+
+/**
+ * Ativação manual (plano B). Não altera slug, domínio nem URL — apenas
+ * coloca o link em modo real e ativo, com registro em auditoria.
+ */
+export async function activateLink(link: LinkRow) {
+  if (!canActivate(link)) throw new MissingRealUrlError();
+  await updateLink(link.id, {
+    mode: "real",
+    active: true,
+    archived_at: null,
+    updated_at: new Date().toISOString(),
+  } as Partial<LinkRow>);
+  await logAudit(link, "manual_activate", {
+    at: new Date().toISOString(),
+    from_mode: link.mode,
+    real_url: link.real_url,
+  });
+}
+
+/** Volta o link para modo espera sem excluir, arquivar ou alterar o destino. */
+export async function deactivateLink(link: LinkRow) {
+  await updateLink(link.id, {
+    mode: "waiting",
+    updated_at: new Date().toISOString(),
+  } as Partial<LinkRow>);
+  await logAudit(link, "manual_waiting", {
+    at: new Date().toISOString(),
+    from_mode: link.mode,
+  });
+}
+
 export async function archiveLink(id: string) {
   const { error } = await supabase
     .from("links")
