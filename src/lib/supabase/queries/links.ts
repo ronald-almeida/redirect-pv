@@ -79,8 +79,8 @@ export class MissingRealUrlError extends Error {
 }
 
 export function canActivate(l: LinkRow): boolean {
-  const hasList = Array.isArray(l.real_urls) && l.real_urls.length > 0;
-  return !!(l.real_url?.trim() || hasList);
+  const list = (l as { real_urls?: string[] | null }).real_urls;
+  return !!(l.real_url?.trim() || (Array.isArray(list) && list.length > 0));
 }
 
 /**
