@@ -1,62 +1,45 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { BarChart3, Globe, MousePointerClick, Smartphone, Timer, TrendingUp } from "lucide-react";
 import { AdminShell, type AdminPeriod } from "@/components/admin/AdminShell";
-import { BreakdownList } from "@/components/admin/analytics/BreakdownList";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { adminPeriodToRange } from "@/lib/admin-period";
+import { useAnalytics } from "@/hooks/use-analytics";
+import { AnalyticsKpis } from "@/components/admin/analytics/AnalyticsKpis";
+import { BarList, ClicksTimeChart } from "@/components/admin/analytics/AnalyticsCharts";
+import { DomainAnalyticsCards } from "@/components/admin/analytics/DomainAnalyticsCards";
+import { LinkAnalyticsList } from "@/components/admin/analytics/LinkAnalyticsList";
+import { MonthlyReportCard } from "@/components/admin/analytics/MonthlyReportCard";
+import { ExportMenu } from "@/components/admin/analytics/ExportMenu";
 import { nf } from "@/lib/format";
-import { useClicks } from "@/hooks/use-clicks";
-import { useLinks } from "@/hooks/use-links";
-import { useDomains } from "@/hooks/use-domains";
-import { useBusinessAnalytics } from "@/lib/business-analytics";
 
 export const Route = createFileRoute("/admin/analytics")({
   head: () => ({
     meta: [
-      { title: "Analytics de negócio · Big Cloak" },
+      { title: "Analytics operacional · Big Cloak" },
       {
         name: "description",
         content:
-          "Descubra quais links e domínios geram mais acessos e redirecionamentos reais no Big Cloak.",
+          "Cliques por dia, domínio e link, tempo de redirect e relatório mensal consolidado do Big Cloak.",
       },
+      { property: "og:title", content: "Analytics operacional · Big Cloak" },
+      {
+        property: "og:description",
+        content: "Qual domínio está sendo mais usado, qual link recebeu mais acessos e como está o redirect.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: AnalyticsPage,
 });
 
-const CHART = { grid: "#1C1C20", axis: "#52525B" };
-
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider">{label}</span>
-      </div>
-      <p className="mt-2 text-[24px] font-bold leading-none tabular-nums">{value}</p>
-      {hint && <p className="mt-1 text-[11.5px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
+const PERIOD_HINT: Record<AdminPeriod, string> = {
+  today: "hoje",
+  yesterday: "ontem",
+  "7d": "nos últimos 7 dias",
+  "30d": "nos últimos 30 dias",
+  custom: "no período selecionado",
+};
 
 function AnalyticsPage() {
   const [period, setPeriod] = useState<AdminPeriod>("today");
@@ -67,14 +50,19 @@ function AnalyticsPage() {
     [period, customStart, customEnd],
   );
 
-  const { clicks, isLoading } = useClicks(range);
-  const { data: links = [] } = useLinks();
-  const { domains } = useDomains();
-  const { kpis, byLink, byDomain, byDevice, byCountry, series } = useBusinessAnalytics(
-    clicks,
-    links,
-    domains,
-  );
+  const {
+    overview,
+    domainRows,
+    linkRows,
+    series,
+    domainBars,
+    topLinks,
+    results,
+    devices,
+    monthly,
+    periodTotal,
+    isLoading,
+  } = useAnalytics(range);
 
   return (
     <AdminShell
@@ -88,128 +76,80 @@ function AnalyticsPage() {
       }}
     >
       <div className="space-y-4">
-        <div>
-          <h1 className="text-[19px] font-bold tracking-tight">Analytics</h1>
-          <p className="text-[12.5px] text-muted-foreground">
-            O que está gerando resultado no período selecionado.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Kpi
-            icon={MousePointerClick}
-            label="Acessos"
-            value={nf(kpis.total)}
-            hint={isLoading ? "Carregando…" : `${kpis.activeLinks} links acessados`}
-          />
-          <Kpi
-            icon={TrendingUp}
-            label="Redirecionados"
-            value={nf(kpis.redirected)}
-            hint={`${kpis.conversion.toFixed(1)}% dos acessos`}
-          />
-          <Kpi
-            icon={BarChart3}
-            label="Página de espera"
-            value={nf(kpis.waiting)}
-            hint="Acessos sem destino ativo"
-          />
-          <Kpi
-            icon={Timer}
-            label="Tempo médio"
-            value={kpis.avgMs ? `${kpis.avgMs} ms` : "—"}
-            hint="Do clique até o destino"
-          />
-        </div>
-
-        <section className="rounded-xl border border-border bg-card p-4">
-          <h2 className="text-[13.5px] font-bold">Acessos ao longo do tempo</h2>
-          <p className="text-[11.5px] text-muted-foreground">
-            Comparativo entre total de acessos e redirecionamentos reais.
-          </p>
-          <div className="mt-3 h-[220px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gAcessos" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#13C286" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#13C286" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke={CHART.grid} vertical={false} />
-                <XAxis
-                  dataKey="day"
-                  stroke={CHART.axis}
-                  tickLine={false}
-                  axisLine={false}
-                  fontSize={10.5}
-                />
-                <YAxis
-                  stroke={CHART.axis}
-                  tickLine={false}
-                  axisLine={false}
-                  fontSize={10.5}
-                  width={44}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "#0F0F10",
-                    border: "1px solid #27272A",
-                    borderRadius: 8,
-                    fontSize: 11.5,
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="acessos"
-                  name="Acessos"
-                  stroke="#13C286"
-                  strokeWidth={2}
-                  fill="url(#gAcessos)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="redirecionados"
-                  name="Redirecionados"
-                  stroke="#38BDF8"
-                  strokeWidth={1.5}
-                  fill="transparent"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-[19px] font-bold tracking-tight">Analytics</h1>
+            <p className="text-[12.5px] text-muted-foreground">
+              {isLoading
+                ? "Carregando dados…"
+                : `${nf(periodTotal)} cliques ${PERIOD_HINT[period]}.`}
+            </p>
           </div>
-        </section>
-
-        <div className="grid gap-3 lg:grid-cols-2">
-          <BreakdownList
-            title="Links com melhor desempenho"
-            subtitle="Ordenados por volume de acessos"
-            rows={byLink}
-            showConversion
-          />
-          <BreakdownList
-            title="Desempenho por domínio"
-            subtitle="Distribuição do tráfego entre os domínios"
-            rows={byDomain}
-            showConversion
-          />
+          <ExportMenu />
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-2">
-          <BreakdownList
-            title="Dispositivos"
-            subtitle="De onde os acessos chegam"
-            rows={byDevice}
-          />
-          <BreakdownList title="Países" subtitle="Origem geográfica dos acessos" rows={byCountry} />
-        </div>
+        <AnalyticsKpis o={overview} />
 
-        <p className="flex items-center gap-1.5 pb-2 text-[11.5px] text-muted-foreground">
-          <Globe className="h-3.5 w-3.5" />
-          Dados do período selecionado.
-          <Smartphone className="ml-2 h-3.5 w-3.5" />
-          Otimizado para consulta rápida no celular.
-        </p>
+        <Tabs defaultValue="visao" className="w-full">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="visao" className="text-[12.5px]">
+              Visão geral
+            </TabsTrigger>
+            <TabsTrigger value="dominios" className="text-[12.5px]">
+              Domínios
+            </TabsTrigger>
+            <TabsTrigger value="links" className="text-[12.5px]">
+              Links
+            </TabsTrigger>
+            <TabsTrigger value="mensal" className="text-[12.5px]">
+              Relatório mensal
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="visao" className="mt-3 space-y-2.5">
+            <ClicksTimeChart
+              data={series}
+              title="Cliques ao longo do tempo"
+              subtitle={`Volume de acessos ${PERIOD_HINT[period]}.`}
+            />
+            <div className="grid gap-2.5 lg:grid-cols-2">
+              <BarList
+                title="Cliques por domínio"
+                subtitle="Qual domínio está sendo mais utilizado"
+                rows={domainBars}
+              />
+              <BarList
+                title="Links mais acessados"
+                subtitle="Top 10 do período"
+                rows={topLinks}
+              />
+            </div>
+            <div className="grid gap-2.5 lg:grid-cols-2">
+              <BarList
+                title="Distribuição dos acessos"
+                subtitle="Redirect, espera e erro"
+                rows={results}
+              />
+              <BarList
+                title="Dispositivos"
+                subtitle="Desktop, mobile e tablet"
+                rows={devices}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="dominios" className="mt-3">
+            <DomainAnalyticsCards rows={domainRows} />
+          </TabsContent>
+
+          <TabsContent value="links" className="mt-3">
+            <LinkAnalyticsList rows={linkRows} />
+          </TabsContent>
+
+          <TabsContent value="mensal" className="mt-3">
+            <MonthlyReportCard r={monthly} />
+          </TabsContent>
+        </Tabs>
       </div>
     </AdminShell>
   );
