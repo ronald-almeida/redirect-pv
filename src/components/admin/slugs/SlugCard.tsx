@@ -1,4 +1,13 @@
-import { Archive, ArchiveRestore, Check, Copy, Edit3, MoreHorizontal } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Check,
+  Copy,
+  Edit3,
+  MoreHorizontal,
+  PauseCircle,
+  Play,
+} from "lucide-react";
 import type { LinkRow } from "@/lib/bigcloak";
 import { formatRel, nf } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -23,6 +32,8 @@ interface SlugCardProps {
   onArchive: (l: LinkRow) => void;
   onRestore: (l: LinkRow) => void;
   onDuplicate: (l: LinkRow) => void;
+  onActivate: (l: LinkRow) => void;
+  onDeactivate: (l: LinkRow) => void;
 }
 
 function statusKind(l: LinkRow): "active" | "paused" | "waiting" {
