@@ -44,6 +44,14 @@ export function useLinkMutations() {
       mutationFn: ({ id, mode }: { id: string; mode: Mode }) => setLinkMode(id, mode),
       onSuccess: invalidate,
     }),
+    activate: useMutation({
+      mutationFn: (link: LinkRow) => activateLink(link),
+      onSuccess: invalidate,
+    }),
+    deactivate: useMutation({
+      mutationFn: (link: LinkRow) => deactivateLink(link),
+      onSuccess: invalidate,
+    }),
     setActive: useMutation({
       mutationFn: ({ id, active }: { id: string; active: boolean }) => setLinkActive(id, active),
       onSuccess: invalidate,
