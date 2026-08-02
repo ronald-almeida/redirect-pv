@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { LinkRow, Mode } from "@/lib/bigcloak";
 import {
+  activateLink,
   archiveLink,
   createLink,
+  deactivateLink,
   deleteLink,
   duplicateLink,
   fetchLinks,
