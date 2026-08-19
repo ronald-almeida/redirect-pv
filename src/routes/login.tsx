@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { enableTempAccess } from "@/lib/temp-access";
+
 
 export const Route = createFileRoute("/login")({
   head: () => ({
