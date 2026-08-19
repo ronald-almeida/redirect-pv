@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { hasTempAccess } from "@/lib/temp-access";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -14,6 +15,11 @@ function AdminLayout() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    // Acesso temporário (banco pausado): libera o painel sem sessão.
+    if (hasTempAccess()) {
+      setChecking(false);
+      return;
+    }
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         navigate({ to: "/login" });
@@ -22,7 +28,7 @@ function AdminLayout() {
       setChecking(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (!session) navigate({ to: "/login" });
+      if (!session && !hasTempAccess()) navigate({ to: "/login" });
     });
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
@@ -36,3 +42,4 @@ function AdminLayout() {
   }
   return <Outlet />;
 }
+
