@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { enableTempAccess } from "@/lib/temp-access";
+
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -83,11 +85,29 @@ function LoginPage() {
             {loading ? "Signing in…" : "Sign in"}
           </Button>
         </form>
+        <div className="mt-4 rounded-md border border-dashed p-3">
+          <p className="text-xs text-muted-foreground">
+            Banco de dados pausado? Use o acesso temporário (válido 12h, apenas
+            neste navegador).
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-2 w-full"
+            onClick={() => {
+              enableTempAccess();
+              navigate({ to: "/admin" });
+            }}
+          >
+            Entrar em modo temporário
+          </Button>
+        </div>
         <p className="mt-6 text-center text-xs text-muted-foreground">
           <Link to="/" className="hover:underline">
             ← Back to home
           </Link>
         </p>
+
       </Card>
     </div>
   );
