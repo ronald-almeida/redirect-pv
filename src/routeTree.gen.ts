@@ -15,6 +15,7 @@ import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as RSplatRouteImport } from './routes/r.$'
+import { Route as ConfirmarAgendamentoIdRouteImport } from './routes/confirmar.$agendamentoId'
 import { Route as AdminSlugsRouteImport } from './routes/admin.slugs'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminLatencyRouteImport } from './routes/admin.latency'
@@ -52,6 +53,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const RSplatRoute = RSplatRouteImport.update({
   id: '/r/$',
   path: '/r/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfirmarAgendamentoIdRoute = ConfirmarAgendamentoIdRouteImport.update({
+  id: '/confirmar/$agendamentoId',
+  path: '/confirmar/$agendamentoId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSlugsRoute = AdminSlugsRouteImport.update({
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/admin/latency': typeof AdminLatencyRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/slugs': typeof AdminSlugsRoute
+  '/confirmar/$agendamentoId': typeof ConfirmarAgendamentoIdRoute
   '/r/$': typeof RSplatRoute
   '/admin/': typeof AdminIndexRoute
   '/api/public/health': typeof ApiPublicHealthRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/admin/latency': typeof AdminLatencyRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/slugs': typeof AdminSlugsRoute
+  '/confirmar/$agendamentoId': typeof ConfirmarAgendamentoIdRoute
   '/r/$': typeof RSplatRoute
   '/admin': typeof AdminIndexRoute
   '/api/public/health': typeof ApiPublicHealthRoute
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   '/admin/latency': typeof AdminLatencyRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/slugs': typeof AdminSlugsRoute
+  '/confirmar/$agendamentoId': typeof ConfirmarAgendamentoIdRoute
   '/r/$': typeof RSplatRoute
   '/admin/': typeof AdminIndexRoute
   '/api/public/health': typeof ApiPublicHealthRoute
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
     | '/admin/latency'
     | '/admin/settings'
     | '/admin/slugs'
+    | '/confirmar/$agendamentoId'
     | '/r/$'
     | '/admin/'
     | '/api/public/health'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/admin/latency'
     | '/admin/settings'
     | '/admin/slugs'
+    | '/confirmar/$agendamentoId'
     | '/r/$'
     | '/admin'
     | '/api/public/health'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/admin/latency'
     | '/admin/settings'
     | '/admin/slugs'
+    | '/confirmar/$agendamentoId'
     | '/r/$'
     | '/admin/'
     | '/api/public/health'
@@ -198,6 +210,7 @@ export interface RootRouteChildren {
   SplatRoute: typeof SplatRoute
   AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ConfirmarAgendamentoIdRoute: typeof ConfirmarAgendamentoIdRoute
   RSplatRoute: typeof RSplatRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicHooksWarmupRoute: typeof ApiPublicHooksWarmupRoute
@@ -245,6 +258,13 @@ declare module '@tanstack/react-router' {
       path: '/r/$'
       fullPath: '/r/$'
       preLoaderRoute: typeof RSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/confirmar/$agendamentoId': {
+      id: '/confirmar/$agendamentoId'
+      path: '/confirmar/$agendamentoId'
+      fullPath: '/confirmar/$agendamentoId'
+      preLoaderRoute: typeof ConfirmarAgendamentoIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/slugs': {
@@ -333,6 +353,7 @@ const rootRouteChildren: RootRouteChildren = {
   SplatRoute: SplatRoute,
   AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
+  ConfirmarAgendamentoIdRoute: ConfirmarAgendamentoIdRoute,
   RSplatRoute: RSplatRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicHooksWarmupRoute: ApiPublicHooksWarmupRoute,
