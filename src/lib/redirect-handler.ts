@@ -305,7 +305,10 @@ export async function handleRedirect(request: Request, slug: string): Promise<Re
 
   const response =
     picked.kind === "real"
-      ? transitionHtml(picked.url)
+      ? new Response(null, {
+          status: 302,
+          headers: { Location: picked.url, "Cache-Control": "no-store" },
+        })
       : waitingHtml(link.name ?? null, redirectMs);
 
   // [BACKGROUND TRACKING]
