@@ -202,31 +202,24 @@ function escapeHtml(s: string): string {
 
 function waitingHtml(linkName: string | null, redirectMs: number): Response {
   const brand = escapeHtml((linkName && linkName.trim()) || "Contato");
-  const body = `<!doctype html>
-<html lang="pt-BR"><head>
-<meta charset="utf-8"/>
+  const pageIndex = Math.floor(Math.random() * 3) + 1;
+  const sharedHead = `<meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="robots" content="noindex,nofollow"/>
-<title>${brand}</title>
-<style>
-  :root{color-scheme:dark}
-  html,body{margin:0;height:100%;background:#0B0F0E;color:#E8EDEA;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;-webkit-font-smoothing:antialiased}
-  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center}
-  .brand{font-size:15px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#34D399;margin-bottom:40px}
-  .pulse{position:relative;width:96px;height:96px;margin-bottom:36px}
-  .pulse::before,.pulse::after{content:"";position:absolute;inset:0;border-radius:50%;background:rgba(52,211,153,.14);animation:pulse 2.4s cubic-bezier(.4,0,.6,1) infinite}
-  .pulse::after{animation-delay:1.2s}
-  .dot{position:absolute;inset:32px;border-radius:50%;background:#34D399;box-shadow:0 0 32px rgba(52,211,153,.5)}
-  @keyframes pulse{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.6);opacity:0}}
-  h1{margin:0 0 14px;font-size:22px;font-weight:600;letter-spacing:-.01em;color:#F1F5F3;max-width:520px}
-  p{margin:0;font-size:14.5px;line-height:1.6;color:#8A968F;max-width:460px}
-</style></head>
-<body><div class="wrap">
-<div class="brand">${brand}</div>
-<div class="pulse" aria-hidden="true"><div class="dot"></div></div>
-<h1>Em breve entraremos em contato com você</h1>
-<p>Obrigado pela sua paciência.</p>
-</div></body></html>`;
+<title>${brand}</title>`;
+
+  const pages: Record<number, string> = {
+    1: `<!doctype html><html lang="pt-BR"><head>${sharedHead}<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#fff;color:#171717;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;-webkit-font-smoothing:antialiased}body{min-height:100vh;display:grid;place-items:center}.wrap{width:min(100%,720px);padding:40px 24px;text-align:center}.brand{margin:0 0 22px;font-size:clamp(36px,8vw,72px);line-height:1.05;font-weight:800;overflow-wrap:anywhere}.message{margin:0;color:#666;font-size:clamp(17px,3vw,21px);line-height:1.6}.dots{height:18px;margin-top:28px;display:flex;align-items:center;justify-content:center;gap:8px}.dots i{display:block;width:7px;height:7px;border-radius:50%;background:#303030;animation:dot 1.2s ease-in-out infinite}.dots i:nth-child(2){animation-delay:.16s}.dots i:nth-child(3){animation-delay:.32s}@keyframes dot{0%,60%,100%{transform:translateY(0);opacity:.28}30%{transform:translateY(-7px);opacity:1}}@media(prefers-reduced-motion:reduce){.dots i{animation:none;opacity:.55}}
+</style></head><body><main class="wrap"><h1 class="brand">${brand}</h1><p class="message">Em breve entraremos em contato com você.</p><div class="dots" aria-label="Aguardando"><i></i><i></i><i></i></div></main></body></html>`,
+    2: `<!doctype html><html lang="pt-BR"><head>${sharedHead}<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#0a0a0a;color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;-webkit-font-smoothing:antialiased}body{min-height:100vh;display:grid;place-items:center;overflow:hidden}.wrap{width:min(100%,760px);padding:40px 24px;text-align:center}.pulse{position:relative;width:90px;height:90px;margin:0 auto 42px}.pulse:before,.pulse:after{content:"";position:absolute;inset:0;border:1px solid #8b5cf6;border-radius:50%;animation:pulse 2.4s ease-out infinite}.pulse:after{animation-delay:1.2s}.core{position:absolute;inset:30px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7);box-shadow:0 0 34px rgba(139,92,246,.6)}.brand{margin:0 0 20px;font-size:clamp(38px,8vw,76px);line-height:1.06;font-weight:800;overflow-wrap:anywhere;background:linear-gradient(90deg,#818cf8,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent}.message{margin:0 auto;max-width:560px;color:#a3a3a3;font-size:clamp(17px,3vw,21px);line-height:1.65}@keyframes pulse{0%{transform:scale(.55);opacity:.9}100%{transform:scale(1.65);opacity:0}}@media(prefers-reduced-motion:reduce){.pulse:before,.pulse:after{animation:none;opacity:.28}}
+</style></head><body><main class="wrap"><div class="pulse" aria-hidden="true"><span class="core"></span></div><h1 class="brand">${brand}</h1><p class="message">Estamos preparando algo especial para você. Aguarde.</p></main></body></html>`,
+    3: `<!doctype html><html lang="pt-BR"><head>${sharedHead}<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;color:#27233a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;-webkit-font-smoothing:antialiased}body{min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(135deg,#dff4ff 0%,#eee5ff 100%)}.card{width:min(100%,620px);padding:clamp(36px,8vw,64px) clamp(24px,7vw,56px);text-align:center;background:#fff;border:1px solid rgba(99,102,241,.12);border-radius:24px;box-shadow:0 24px 70px rgba(76,70,130,.14)}.wave{display:flex;justify-content:center;align-items:end;gap:6px;height:38px;margin:0 auto 28px}.wave i{display:block;width:8px;height:20px;border-radius:8px;background:#818cf8;animation:wave 1s ease-in-out infinite}.wave i:nth-child(2){height:30px;animation-delay:.12s}.wave i:nth-child(3){height:24px;animation-delay:.24s}.wave i:nth-child(4){height:34px;animation-delay:.36s}.wave i:nth-child(5){animation-delay:.48s}.brand{margin:0 0 18px;color:#4f46e5;font-size:clamp(32px,7vw,58px);line-height:1.08;font-weight:800;overflow-wrap:anywhere}.message{margin:0;color:#67627b;font-size:clamp(16px,3vw,20px);line-height:1.65}@keyframes wave{0%,100%{transform:translateY(0) scaleY(.65);opacity:.55}50%{transform:translateY(-7px) scaleY(1);opacity:1}}@media(max-width:480px){body{padding:16px}.card{border-radius:18px}}@media(prefers-reduced-motion:reduce){.wave i{animation:none}}
+</style></head><body><main class="card"><div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><h1 class="brand">${brand}</h1><p class="message">Olá! Em breve um de nossos atendentes entrará em contato.</p></main></body></html>`,
+  };
+  const body = pages[pageIndex];
   return new Response(body, {
     status: 200,
     headers: {
