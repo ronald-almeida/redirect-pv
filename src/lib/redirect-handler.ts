@@ -55,8 +55,6 @@ const BOT_REGEX =
 const DEVICE_REGEX = /mobile|android|iphone|ipad|ipod/i;
 const PREFETCH_REGEX = /prefetch|preview|prerender/i;
 
-/** Atraso da tela de transição antes do destino real (ms). */
-const TRANSITION_MS = 600;
 
 type LinkRow = {
   id: string;
@@ -201,37 +199,6 @@ function escapeHtml(s: string): string {
   );
 }
 
-function transitionHtml(destination: string): Response {
-  const safe = escapeHtml(destination);
-  const jsSafe = destination.replace(
-    /[\\'"<>]/g,
-    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
-  );
-  const body = `<!doctype html>
-<html lang="pt-BR"><head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<meta name="robots" content="noindex,nofollow"/>
-<title>Redirecionando…</title>
-<link rel="preconnect" href="${safe}"/>
-<meta http-equiv="refresh" content="2;url=${safe}"/>
-<style>
-  :root{color-scheme:dark}
-  html,body{margin:0;height:100%;background:#0B0F0E;color:#E8EDEA;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;-webkit-font-smoothing:antialiased}
-  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px;text-align:center}
-  .spinner{width:52px;height:52px;border-radius:50%;border:3px solid rgba(255,255,255,.07);border-top-color:#34D399;animation:spin .8s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  p{margin:0;font-size:15px;color:#8A968F;letter-spacing:.01em}
-</style></head>
-<body><div class="wrap"><div class="spinner" aria-hidden="true"></div>
-<p>Estamos te redirecionando…</p></div>
-<script>setTimeout(function(){window.location.replace("${jsSafe}")},${TRANSITION_MS});</script>
-</body></html>`;
-  return new Response(body, {
-    status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
-  });
-}
 
 function waitingHtml(linkName: string | null, redirectMs: number): Response {
   const brand = escapeHtml((linkName && linkName.trim()) || "Contato");
@@ -305,7 +272,10 @@ export async function handleRedirect(request: Request, slug: string): Promise<Re
 
   const response =
     picked.kind === "real"
-      ? transitionHtml(picked.url)
+      ? new Response(null, {
+          status: 302,
+          headers: { Location: picked.url, "Cache-Control": "no-store" },
+        })
       : waitingHtml(link.name ?? null, redirectMs);
 
   // [BACKGROUND TRACKING]
