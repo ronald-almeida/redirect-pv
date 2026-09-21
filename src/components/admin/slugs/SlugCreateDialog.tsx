@@ -9,9 +9,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { SLUG_HINT, SLUG_RE, type DomainRow } from "@/lib/bigcloak";
+import type { DomainRow } from "@/lib/bigcloak";
 import { humanizeLinkError, slugExists } from "@/lib/supabase/queries/links";
 import { cn } from "@/lib/utils";
+
+const MANUAL_SLUG_RE = /^[a-z0-9_-]+$/;
+const MANUAL_SLUG_HINT = "Use apenas letras minúsculas, números, hífens e underscores.";
+
+type SlugMode = "manual" | "automatic";
+
+function generateAutomaticSlug() {
+  return `ut-${Math.random().toString(36).substring(2, 8)}`;
+}
 
 interface SlugCreateDialogProps {
   open: boolean;
@@ -33,6 +42,7 @@ export function SlugCreateDialog({
   defaultDomainId,
   onCreate,
 }: SlugCreateDialogProps) {
+  const [slugMode, setSlugMode] = useState<SlugMode>("manual");
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
   const [realUrl, setRealUrl] = useState("");
@@ -52,6 +62,7 @@ export function SlugCreateDialog({
       : "";
 
   const reset = () => {
+    setSlugMode("manual");
     setSlug("");
     setName("");
     setRealUrl("");
@@ -61,15 +72,31 @@ export function SlugCreateDialog({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    const value = slug.trim();
-    if (!value) return setError("Informe um slug.");
-    if (!SLUG_RE.test(value)) return setError(SLUG_HINT);
+    let value = slug.trim();
+    if (slugMode === "manual") {
+      if (!value) return setError("Informe um slug.");
+      if (!MANUAL_SLUG_RE.test(value)) return setError(MANUAL_SLUG_HINT);
+    }
 
     setSaving(true);
     try {
-      if (await slugExists(value)) {
-        setError("Este slug já existe. Escolha outro.");
-        return;
+      if (slugMode === "manual") {
+        if (await slugExists(value)) {
+          setError("Este slug já existe");
+          return;
+        }
+      } else {
+        let attempts = 0;
+        do {
+          value = generateAutomaticSlug();
+          attempts += 1;
+          if (!(await slugExists(value))) break;
+        } while (attempts < 10);
+
+        if (attempts === 10 && (await slugExists(value))) {
+          setError("Não foi possível gerar um slug único. Tente novamente.");
+          return;
+        }
       }
       await onCreate({
         slug: value,
@@ -80,7 +107,8 @@ export function SlugCreateDialog({
       reset();
       onOpenChange(false);
     } catch (err) {
-      setError(humanizeLinkError(err));
+      const databaseError = err as { code?: string } | null;
+      setError(databaseError?.code === "23505" ? "Este slug já existe" : humanizeLinkError(err));
     } finally {
       setSaving(false);
     }
@@ -99,6 +127,48 @@ export function SlugCreateDialog({
           <DialogTitle>Novo link</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Criação do slug</Label>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1 rounded-full border border-border bg-secondary/60 p-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                aria-pressed={slugMode === "manual"}
+                className={cn(
+                  "min-w-0 rounded-full px-2 text-[11px] shadow-none sm:text-xs",
+                  slugMode === "manual"
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                    : "bg-transparent text-muted-foreground",
+                )}
+                onClick={() => {
+                  setSlugMode("manual");
+                  setError(null);
+                }}
+              >
+                ✏️ Manual
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                aria-pressed={slugMode === "automatic"}
+                className={cn(
+                  "min-w-0 rounded-full px-2 text-[11px] shadow-none sm:text-xs",
+                  slugMode === "automatic"
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                    : "bg-transparent text-muted-foreground",
+                )}
+                onClick={() => {
+                  setSlugMode("automatic");
+                  setError(null);
+                }}
+              >
+                ⚡ Automático
+              </Button>
+            </div>
+          </div>
+
           {domains.length > 0 && (
             <div className="space-y-1.5">
               <Label className="text-xs">Domínio</Label>
@@ -125,40 +195,62 @@ export function SlugCreateDialog({
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="new-slug" className="text-xs">
-              Slug
-            </Label>
-            <div
-              className={cn(
-                "flex items-center rounded-md border bg-secondary px-2.5 focus-within:border-primary",
-                error ? "border-destructive" : "border-border",
+          {slugMode === "manual" ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="new-slug" className="text-xs">
+                Slug
+              </Label>
+              <div
+                className={cn(
+                  "flex items-center rounded-md border bg-secondary px-2.5 focus-within:border-primary",
+                  error ? "border-destructive" : "border-border",
+                )}
+              >
+                <span className="hidden shrink-0 font-mono text-[12.5px] text-muted-foreground sm:inline">
+                  {previewOrigin}/
+                </span>
+                <input
+                  id="new-slug"
+                  value={slug}
+                  onChange={(e) => {
+                    setSlug(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="ex: joao, atendente-01, ut_1237123"
+                  title={MANUAL_SLUG_HINT}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  required
+                  autoFocus
+                  className="min-w-0 flex-1 bg-transparent py-2 font-mono text-base outline-none sm:text-[12.5px]"
+                />
+              </div>
+              {error ? (
+                <p className="text-[11px] font-medium text-destructive" role="alert">
+                  {error}
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Sem URL de destino o link nasce em modo Espera.
+                </p>
               )}
-            >
-              <span className="shrink-0 font-mono text-[12.5px] text-muted-foreground">
-                {previewOrigin}/
-              </span>
-              <input
-                id="new-slug"
-                value={slug}
-                onChange={(e) => {
-                  setSlug(e.target.value);
-                  if (error) setError(null);
-                }}
-                placeholder="ex: joao"
-                required
-                autoFocus
-                className="min-w-0 flex-1 bg-transparent py-2 font-mono text-base outline-none sm:text-[12.5px]"
-              />
             </div>
-            {error ? (
-              <p className="text-[11px] font-medium text-destructive">{error}</p>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">
+          ) : (
+            <div className="rounded-md border border-border bg-secondary px-3 py-3">
+              <p className="font-mono text-[12.5px] font-medium text-foreground">
+                Slug gerado automaticamente (ex: ut-a3f9k2)
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
                 Sem URL de destino o link nasce em modo Espera.
               </p>
-            )}
-          </div>
+              {error && (
+                <p className="mt-1 text-[11px] font-medium text-destructive" role="alert">
+                  {error}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
