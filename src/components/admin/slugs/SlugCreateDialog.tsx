@@ -133,9 +133,14 @@ export function SlugCreateDialog({
               <Button
                 type="button"
                 size="sm"
-                variant={slugMode === "manual" ? "default" : "ghost"}
+                variant="ghost"
                 aria-pressed={slugMode === "manual"}
-                className="min-w-0 rounded-full px-2 text-[11px] shadow-none sm:text-xs"
+                className={cn(
+                  "min-w-0 rounded-full px-2 text-[11px] shadow-none sm:text-xs",
+                  slugMode === "manual"
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                    : "bg-transparent text-muted-foreground",
+                )}
                 onClick={() => {
                   setSlugMode("manual");
                   setError(null);
@@ -146,9 +151,14 @@ export function SlugCreateDialog({
               <Button
                 type="button"
                 size="sm"
-                variant={slugMode === "automatic" ? "default" : "ghost"}
+                variant="ghost"
                 aria-pressed={slugMode === "automatic"}
-                className="min-w-0 rounded-full px-2 text-[11px] shadow-none sm:text-xs"
+                className={cn(
+                  "min-w-0 rounded-full px-2 text-[11px] shadow-none sm:text-xs",
+                  slugMode === "automatic"
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                    : "bg-transparent text-muted-foreground",
+                )}
                 onClick={() => {
                   setSlugMode("automatic");
                   setError(null);
