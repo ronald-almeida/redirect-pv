@@ -129,13 +129,13 @@ export function SlugCreateDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-xs">Criação do slug</Label>
-            <div className="grid grid-cols-2 gap-1 rounded-full border border-border bg-secondary/60 p-1">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1 rounded-full border border-border bg-secondary/60 p-1">
               <Button
                 type="button"
                 size="sm"
                 variant={slugMode === "manual" ? "default" : "ghost"}
                 aria-pressed={slugMode === "manual"}
-                className="rounded-full shadow-none"
+                className="min-w-0 rounded-full px-2 text-[11px] shadow-none sm:text-xs"
                 onClick={() => {
                   setSlugMode("manual");
                   setError(null);
@@ -148,7 +148,7 @@ export function SlugCreateDialog({
                 size="sm"
                 variant={slugMode === "automatic" ? "default" : "ghost"}
                 aria-pressed={slugMode === "automatic"}
-                className="rounded-full shadow-none"
+                className="min-w-0 rounded-full px-2 text-[11px] shadow-none sm:text-xs"
                 onClick={() => {
                   setSlugMode("automatic");
                   setError(null);
@@ -196,7 +196,7 @@ export function SlugCreateDialog({
                   error ? "border-destructive" : "border-border",
                 )}
               >
-                <span className="shrink-0 font-mono text-[12.5px] text-muted-foreground">
+                <span className="hidden shrink-0 font-mono text-[12.5px] text-muted-foreground sm:inline">
                   {previewOrigin}/
                 </span>
                 <input
