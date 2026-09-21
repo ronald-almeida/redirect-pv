@@ -207,7 +207,6 @@ export function SlugCreateDialog({
                     if (error) setError(null);
                   }}
                   placeholder="ex: joao, atendente-01, ut_1237123"
-                  pattern="[a-z0-9_-]+"
                   title={MANUAL_SLUG_HINT}
                   autoCapitalize="none"
                   autoCorrect="off"
