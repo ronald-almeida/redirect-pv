@@ -20,6 +20,13 @@ export const Route = createFileRoute("/agendamento/$agendamentoId")({
         name: "description",
         content: "Confirme seu novo horário de atendimento.",
       },
+      { property: "og:title", content: "Confirmar agendamento" },
+      {
+        property: "og:description",
+        content: "Confirme seu novo horário de atendimento.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ConfirmarAgendamento,
