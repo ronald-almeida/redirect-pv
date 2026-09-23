@@ -259,6 +259,14 @@ html[data-estilo="id10"]{--bg:#f5f6f8;--text:#20243a;--muted:#667085;--surface:#
 export async function handleRedirect(request: Request, slug: string): Promise<Response> {
   const t0 = Date.now();
 
+  let rawSlug = slug;
+  try {
+    rawSlug = decodeURIComponent(slug);
+  } catch {
+    // Keep the router-provided value when malformed percent-encoding is received.
+  }
+  console.log("[redirect] raw slug from URL:", rawSlug);
+
   let search = "";
   let host = "";
   try {
@@ -269,7 +277,7 @@ export async function handleRedirect(request: Request, slug: string): Promise<Re
     /* ignore */
   }
 
-  const link = await fetchLink(slug, search);
+  const link = await fetchLink(rawSlug, search);
 
   if (!link) {
     return waitingHtml(null, Date.now() - t0);
