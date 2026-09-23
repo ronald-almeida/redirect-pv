@@ -12,7 +12,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
-export const Route = createFileRoute("/confirmar/$agendamentoId")({
+export const Route = createFileRoute("/agendamento/$agendamentoId")({
   head: () => ({
     meta: [
       { title: "Confirmar agendamento" },
